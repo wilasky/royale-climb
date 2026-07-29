@@ -1,32 +1,50 @@
-# React + TypeScript + Vite
+# 🃏 Royale Climb
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Un roguelike de cartas donde construyes combos de póker, eliges modificadores tras cada ronda y escalas dificultad hasta que la baraja te traiciona.
 
-Currently, two official plugins are available:
+**👉 [JUGAR EN EL NAVEGADOR](https://royale-climb.vercel.app)**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## De qué va
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Cada ronda tienes un objetivo de puntos. Formas combinaciones (parejas, tríos, escaleras, colores...) para puntuar. Al superar la ronda eliges un **modificador** que cambia tus reglas de puntuación para el resto de la partida. Cada 3 rondas se abre una **tienda** donde afinas tu baraja.
 
-## Expanding the Oxlint configuration
+- **24 modificadores** con sinergias reales
+- **Combinación especial propia**: Espectro (5 cartas del mismo color, sin ser color)
+- **Cartas especiales**: cristal, acero, oro, con efectos únicos
+- **Semillas reproducibles** — comparte una semilla y otro juega tu misma partida
+- **Modo Endless** para runs infinitas
+- **Pixel art CSS puro** — sin assets externos, todo dibujado a mano en código
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## Cómo se juega
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+1. Selecciona hasta 5 cartas de tu mano
+2. Juega la mano (puntúa) o descarta (cambia cartas)
+3. Alcanza el objetivo antes de quedarte sin manos
+4. Elige un modificador y sigue escalando
+
+Tienes 4 manos y 3 descartes por ronda. La dificultad sube exponencialmente.
+
+## Stack
+
+- React + TypeScript
+- Tailwind CSS
+- Vite
+
+Todo en un único archivo React. Sin backend, sin dependencias pesadas.
+
+## Créditos
+
+Proyecto vibecodeado con Claude (Anthropic) como piloto. Diseño de sistemas, sprites pixel-art y balance por iteración conversacional.
+
+## Ejecutar en local
+
+Si quieres tocarlo tú:
+
+```bash
+git clone https://github.com/wilasky/royale-climb.git
+cd royale-climb
+npm install
+npm run dev
 ```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
