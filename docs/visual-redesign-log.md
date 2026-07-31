@@ -31,6 +31,14 @@ Documento vivo de las decisiones tomadas durante el rediseño visual, para no de
 6. **Cartas especiales (combo / multiplicador / cristal / oro) tienen movimiento; las normales NO.**
    Regla explícita: la baraja normal se queda estática. Las cartas con un efecto de juego real llevan animación que comunica ese efecto — ejemplo aprobado: anillo que gira + chispazos de energía + insignia "×2" pulsante. Rechazado antes: una chispa suelta sin significado ("no dice nada").
 
+## Nota de calidad: consistencia de resolución entre reyes
+
+Los 3 reyes generados (picas/tréboles/corazones) no tienen la misma densidad de detalle pixel-art — cada generación es independiente. Al usuario le gustan los 3, pero el de **corazones** es el que más transmite "pixel art de verdad" (más densidad/textura). Usar ese como referencia de fidelidad al regenerar diamantes y al generar Reina/Jota, para que el set final sea consistente.
+
+## Aclaración importante: Artifact (mockup) ≠ el juego
+
+Los Artifacts de claude.ai que se han ido publicando durante esta exploración (mockups de estilos, cartas, reyes) son **solo herramientas de boceto desechables** — HTML de un único archivo con límites duros de tamaño/complejidad propios de ese formato. El juego real no es ni será un Artifact: es el proyecto React+Vite+TS de este repo, desplegado a Vercel vía build normal, sin ese techo. Cuando se implemente el rediseño de verdad, se hace directamente sobre `src/App.tsx` / componentes nuevos, no pegando el HTML de los mockups.
+
 ## Estado de créditos
 
 Sin créditos en el workspace de Higgsfield a fecha 2026-07-31. La generación del Rey de diamantes quedó a medias (imagen inválida, fondo claro) justo antes de agotarse. Cuando haya créditos de nuevo: regenerar ese primero, luego seguir con Reina/Jota.
