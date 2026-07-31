@@ -1,0 +1,471 @@
+<title>Royale Climb — Direcciones visuales</title>
+<style>
+  :root{
+    --page-bg:#f3f1ec;
+    --page-bg-2:#ffffff;
+    --page-ink:#1c1a17;
+    --page-ink-dim:#6b6558;
+    --page-line:#dedad0;
+    --page-accent:#7a5cff;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --page-bg:#141318;
+      --page-bg-2:#1b1a20;
+      --page-ink:#eeece6;
+      --page-ink-dim:#928c7e;
+      --page-line:#302e35;
+      --page-accent:#a894ff;
+    }
+  }
+  :root[data-theme="dark"]{
+    --page-bg:#141318; --page-bg-2:#1b1a20; --page-ink:#eeece6; --page-ink-dim:#928c7e; --page-line:#302e35; --page-accent:#a894ff;
+  }
+  :root[data-theme="light"]{
+    --page-bg:#f3f1ec; --page-bg-2:#ffffff; --page-ink:#1c1a17; --page-ink-dim:#6b6558; --page-line:#dedad0; --page-accent:#7a5cff;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--page-bg);
+    color:var(--page-ink);
+    font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .page{
+    max-width:1180px;
+    margin:0 auto;
+    padding:3.5rem 1.5rem 5rem;
+  }
+
+  .page__head{
+    max-width:640px;
+    margin:0 0 3rem;
+  }
+  .page__eyebrow{
+    font-size:.72rem;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--page-accent);
+    font-weight:700;
+    margin:0 0 .6rem;
+  }
+  .page__head h1{
+    font-size:clamp(1.7rem,3vw,2.3rem);
+    line-height:1.15;
+    margin:0 0 .8rem;
+    text-wrap:balance;
+    letter-spacing:-0.01em;
+  }
+  .page__head p{
+    color:var(--page-ink-dim);
+    font-size:1rem;
+    line-height:1.6;
+    margin:0;
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
+    gap:2.75rem 2.25rem;
+  }
+
+  .slot{ display:flex; flex-direction:column; gap:1rem; }
+
+  .mock{
+    position:relative;
+    width:100%;
+    aspect-ratio:3/4;
+    border-radius:14px;
+    overflow:hidden;
+    isolation:isolate;
+    box-shadow:0 1px 2px rgba(0,0,0,.06), 0 18px 40px -18px rgba(0,0,0,.35);
+  }
+  .mock__frame{
+    position:relative;
+    z-index:2;
+    height:100%;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    padding:1.4rem;
+  }
+
+  .caption h3{
+    margin:0 0 .3rem;
+    font-size:1.02rem;
+    letter-spacing:-.005em;
+  }
+  .caption p{
+    margin:0;
+    font-size:.86rem;
+    line-height:1.55;
+    color:var(--page-ink-dim);
+  }
+
+  /* ============ shared card primitives (each style overrides look) ============ */
+  .cards{ display:flex; gap:.5rem; justify-content:center; }
+  .card{
+    flex:1 1 0;
+    max-width:88px;
+    aspect-ratio:5/7;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    font-weight:800;
+    position:relative;
+  }
+  .card__rank{ font-size:1.35rem; line-height:1; }
+  .card__suit{ font-size:1.6rem; line-height:1; margin-top:.15rem; }
+
+  .hud{ display:flex; gap:.5rem; }
+  .stat{ flex:1; text-align:center; padding:.4rem .3rem; }
+  .stat__label{ display:block; font-size:.56rem; letter-spacing:.1em; text-transform:uppercase; opacity:.7; }
+  .stat__value{ display:block; font-size:1.05rem; font-weight:800; font-variant-numeric:tabular-nums; }
+
+  .cta{
+    border:0;
+    width:100%;
+    padding:.85rem;
+    font-weight:800;
+    font-size:.92rem;
+    cursor:default;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .mock *{ animation:none !important; transition:none !important; }
+  }
+
+  /* ============================================================
+     1 — CASINO OSCURO DE LUJO
+     ============================================================ */
+  .mock--casino{ background:radial-gradient(ellipse at 50% -10%, #103826 0%, #071a12 55%, #05100b 100%); }
+  .mock--casino::before{
+    content:"";
+    position:absolute; inset:0; z-index:1;
+    background-image:
+      repeating-linear-gradient(115deg, rgba(212,175,90,.05) 0 2px, transparent 2px 34px),
+      repeating-linear-gradient(25deg, rgba(212,175,90,.04) 0 2px, transparent 2px 34px);
+    mix-blend-mode:overlay;
+  }
+  .mock--casino .mock__frame{ border:1px solid rgba(212,175,90,.35); margin:.55rem; border-radius:10px; padding:1.1rem; }
+  .mock--casino .title{
+    font-family:Cambria,"Palatino Linotype",Palatino,Georgia,serif;
+    font-weight:700;
+    font-style:italic;
+    text-align:center;
+    font-size:1.55rem;
+    letter-spacing:.04em;
+    color:#f3e3ad;
+    text-shadow:0 1px 0 #7a5a17,0 0 18px rgba(243,227,173,.35);
+    margin:.2rem 0 0;
+  }
+  .mock--casino .subtitle{
+    text-align:center; font-size:.6rem; letter-spacing:.32em; text-transform:uppercase;
+    color:#7fae95; margin-top:.25rem;
+  }
+  .mock--casino .card{
+    background:linear-gradient(160deg,#fbf6e6,#eadfbd);
+    border:1px solid #8a6a1f;
+    border-radius:4px;
+    box-shadow:0 3px 0 #4d3a10, inset 0 0 0 1px rgba(255,255,255,.5);
+    color:#1c1108;
+  }
+  .mock--casino .card:nth-child(1) .card__suit,.mock--casino .card:nth-child(1) .card__rank{ color:#7a1620; }
+  .mock--casino .card:nth-child(3) .card__suit,.mock--casino .card:nth-child(3) .card__rank{ color:#8a6a1f; }
+  .mock--casino .hud{ border-top:1px solid rgba(212,175,90,.3); border-bottom:1px solid rgba(212,175,90,.3); padding:.5rem 0; }
+  .mock--casino .stat__value{ color:#f3e3ad; }
+  .mock--casino .stat__label{ color:#7fae95; }
+  .mock--casino .cta{
+    margin-top:.9rem;
+    background:linear-gradient(180deg,#f3e3ad,#c9a227);
+    color:#2b1c04;
+    border-radius:3px;
+    letter-spacing:.05em;
+    box-shadow:0 3px 0 #7a5a17;
+  }
+
+  /* ============================================================
+     2 — FANTASÍA ILUSTRADA
+     ============================================================ */
+  .mock--fantasy{ background:radial-gradient(circle at 30% 15%, #472159 0%, #2a1230 45%, #180a1e 100%); }
+  .mock--fantasy::before{
+    content:""; position:absolute; inset:0; z-index:1;
+    background:
+      radial-gradient(circle at 78% 8%, rgba(255,158,66,.5) 0%, transparent 32%),
+      radial-gradient(circle at 12% 90%, rgba(92,184,138,.35) 0%, transparent 38%);
+    filter:blur(2px);
+  }
+  .ember{
+    position:absolute; z-index:1; border-radius:50%;
+    background:#ff9e42; box-shadow:0 0 8px 2px rgba(255,158,66,.8);
+    animation:embersfloat 6s ease-in-out infinite;
+  }
+  @keyframes embersfloat{ 0%,100%{ transform:translateY(0); opacity:.35;} 50%{ transform:translateY(-14px); opacity:.9;} }
+  .mock--fantasy .title{
+    font-family:Georgia,"Iowan Old Style",serif;
+    font-weight:900;
+    text-align:center;
+    font-size:1.7rem;
+    color:#ffe3b8;
+    -webkit-text-stroke:1.5px #2a1230;
+    text-shadow:3px 3px 0 #2a1230, 0 0 22px rgba(255,158,66,.5);
+    margin:.2rem 0 0;
+  }
+  .mock--fantasy .subtitle{ text-align:center; font-size:.62rem; letter-spacing:.14em; color:#c9a8d6; margin-top:.3rem; font-style:italic; }
+  .mock--fantasy .card{
+    background:linear-gradient(155deg,#f4e2c1,#e3c98e);
+    border-radius:10px 4px 10px 4px;
+    border:2px solid #6b3f14;
+    box-shadow:0 4px 10px -3px rgba(0,0,0,.5);
+    color:#3a2410;
+    transform:rotate(var(--tilt,0deg));
+  }
+  .mock--fantasy .card:nth-child(1){ --tilt:-4deg; }
+  .mock--fantasy .card:nth-child(2){ --tilt:0deg; }
+  .mock--fantasy .card:nth-child(3){ --tilt:4deg; }
+  .mock--fantasy .card:nth-child(1) .card__suit,.mock--fantasy .card:nth-child(1) .card__rank{ color:#9c2b3a; }
+  .mock--fantasy .card:nth-child(3) .card__suit,.mock--fantasy .card:nth-child(3) .card__rank{ color:#b8631f; }
+  .mock--fantasy .hud{ background:rgba(24,10,30,.5); border-radius:8px; padding:.5rem .3rem; }
+  .mock--fantasy .stat__value{ color:#ffe3b8; }
+  .mock--fantasy .stat__label{ color:#c9a8d6; }
+  .mock--fantasy .cta{
+    margin-top:.9rem;
+    background:linear-gradient(180deg,#ff9e42,#c1501a);
+    color:#2a1230;
+    border-radius:10px;
+    font-family:Georgia,serif;
+    box-shadow:0 4px 0 #7a2f0c;
+  }
+
+  /* ============================================================
+     3 — ARCADE NEÓN
+     ============================================================ */
+  .mock--neon{ background:linear-gradient(180deg,#0a0620 0%,#160a2e 55%,#0a0620 100%); }
+  .mock--neon .floor{
+    position:absolute; z-index:1; left:-20%; right:-20%; bottom:0; height:46%;
+    background-image:
+      repeating-linear-gradient(90deg, rgba(0,229,255,.55) 0 2px, transparent 2px 34px),
+      repeating-linear-gradient(0deg, rgba(0,229,255,.35) 0 1px, transparent 1px 22px);
+    transform:perspective(220px) rotateX(62deg);
+    transform-origin:bottom;
+    mask-image:linear-gradient(180deg, transparent, #000 35%);
+  }
+  .mock--neon .title{
+    position:relative; z-index:2;
+    font-family:"Courier New",ui-monospace,monospace;
+    font-weight:800;
+    text-align:center;
+    font-size:1.5rem;
+    letter-spacing:.06em;
+    color:#fff;
+    text-shadow:0 0 6px #ff2ea1,0 0 18px #ff2ea1,0 0 34px rgba(255,46,161,.6);
+    margin:.2rem 0 0;
+    animation:neonflicker 4.4s infinite;
+  }
+  @keyframes neonflicker{ 0%,92%,100%{ opacity:1;} 93%{ opacity:.6;} 95%{ opacity:1;} 96%{ opacity:.75;} }
+  .mock--neon .subtitle{ position:relative; z-index:2; text-align:center; font-size:.6rem; letter-spacing:.24em; text-transform:uppercase; color:#00e5ff; margin-top:.3rem; font-family:ui-monospace,monospace; }
+  .mock--neon .card{
+    position:relative; z-index:2;
+    background:#0d0620;
+    border:2px solid #00e5ff;
+    border-radius:2px;
+    box-shadow:0 0 10px rgba(0,229,255,.6), inset 0 0 12px rgba(0,229,255,.15);
+    color:#00e5ff;
+    font-family:ui-monospace,monospace;
+  }
+  .mock--neon .card:nth-child(1){ border-color:#ff2ea1; box-shadow:0 0 10px rgba(255,46,161,.6),inset 0 0 12px rgba(255,46,161,.15); color:#ff2ea1; }
+  .mock--neon .card:nth-child(3){ border-color:#ffe94d; box-shadow:0 0 10px rgba(255,233,77,.6),inset 0 0 12px rgba(255,233,77,.15); color:#ffe94d; }
+  .mock--neon .hud{ position:relative; z-index:2; }
+  .mock--neon .stat{ border:1px solid rgba(0,229,255,.4); border-radius:2px; }
+  .mock--neon .stat__value{ color:#fff; font-family:ui-monospace,monospace; }
+  .mock--neon .stat__label{ color:#00e5ff; }
+  .mock--neon .cta{
+    position:relative; z-index:2;
+    margin-top:.9rem;
+    background:#0d0620;
+    color:#ff2ea1;
+    border:2px solid #ff2ea1 !important;
+    border-radius:2px;
+    font-family:ui-monospace,monospace;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    box-shadow:0 0 14px rgba(255,46,161,.5);
+  }
+
+  /* ============================================================
+     4 — MINIMALISTA PREMIUM
+     ============================================================ */
+  .mock--mini{ background:#121214; }
+  .mock--mini .mock__frame{ padding:1.6rem 1.3rem; }
+  .mock--mini .title{
+    text-align:left;
+    font-size:1.3rem;
+    font-weight:600;
+    letter-spacing:-.01em;
+    color:#f3f2ee;
+    margin:0;
+  }
+  .mock--mini .subtitle{ text-align:left; font-size:.62rem; letter-spacing:.14em; text-transform:uppercase; color:#7b7a75; margin-top:.2rem; }
+  .mock--mini .cards{ gap:.7rem; }
+  .mock--mini .card{
+    background:transparent;
+    border:1px solid #38373a;
+    border-radius:2px;
+    color:#f3f2ee;
+    font-weight:600;
+  }
+  .mock--mini .card:nth-child(1){ border-color:#b23b3b; color:#c96a6a; }
+  .mock--mini .card:nth-child(3){ border-color:#8a7a4a; color:#c9b56a; }
+  .mock--mini .hud{ border-top:1px solid #29282b; padding-top:.6rem; }
+  .mock--mini .stat{ text-align:left; padding:0; }
+  .mock--mini .stat__label{ color:#7b7a75; }
+  .mock--mini .stat__value{ color:#f3f2ee; font-weight:600; }
+  .mock--mini .cta{
+    margin-top:1rem;
+    background:#f3f2ee;
+    color:#121214;
+    border-radius:2px;
+    letter-spacing:0;
+    font-weight:600;
+    transition:opacity .15s;
+  }
+
+  .tag-row{ display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.3rem; }
+  .tag{
+    font-size:.68rem; padding:.2rem .55rem; border-radius:999px;
+    border:1px solid var(--page-line); color:var(--page-ink-dim);
+  }
+</style>
+
+<div class="page">
+  <div class="page__head">
+    <p class="page__eyebrow">Royale Climb · propuesta de dirección visual</p>
+    <h1>Cuatro mundos posibles para la misma mesa de juego</h1>
+    <p>Mismos elementos en los cuatro — título, tres cartas (K♥ · A♠ · Q♦), marcador de ronda/ante/dinero y el botón de jugar — para que compares el estilo, no el contenido. Elige uno, pide una mezcla, o descarta los cuatro.</p>
+  </div>
+
+  <div class="grid">
+    <div class="slot">
+      <div class="mock mock--casino">
+        <div class="mock__frame">
+          <div>
+            <div class="title">ROYALE CLIMB</div>
+            <div class="subtitle">Mesa Privada</div>
+          </div>
+          <div class="cards">
+            <div class="card"><span class="card__rank">K</span><span class="card__suit">♥</span></div>
+            <div class="card"><span class="card__rank">A</span><span class="card__suit">♠</span></div>
+            <div class="card"><span class="card__rank">Q</span><span class="card__suit">♦</span></div>
+          </div>
+          <div>
+            <div class="hud">
+              <div class="stat"><span class="stat__label">Ronda</span><span class="stat__value">3</span></div>
+              <div class="stat"><span class="stat__label">Ante</span><span class="stat__value">2</span></div>
+              <div class="stat"><span class="stat__label">Dinero</span><span class="stat__value">$18</span></div>
+            </div>
+            <button class="cta">Jugar mano</button>
+          </div>
+        </div>
+      </div>
+      <div class="caption">
+        <h3>1 · Casino oscuro de lujo</h3>
+        <p>Fieltro verde profundo, oro pulido, tipografía serif elegante. Serio, exclusivo, de mesa real.</p>
+        <div class="tag-row"><span class="tag">Elegante</span><span class="tag">Sobrio</span><span class="tag">Textura fieltro</span></div>
+      </div>
+    </div>
+
+    <div class="slot">
+      <div class="mock mock--fantasy">
+        <div class="ember" style="width:6px;height:6px;left:20%;top:70%;animation-delay:0s;"></div>
+        <div class="ember" style="width:4px;height:4px;left:75%;top:55%;animation-delay:1.2s;"></div>
+        <div class="ember" style="width:5px;height:5px;left:55%;top:80%;animation-delay:2.4s;"></div>
+        <div class="mock__frame">
+          <div>
+            <div class="title">Royale Climb</div>
+            <div class="subtitle">La Torre Infinita</div>
+          </div>
+          <div class="cards">
+            <div class="card"><span class="card__rank">K</span><span class="card__suit">♥</span></div>
+            <div class="card"><span class="card__rank">A</span><span class="card__suit">♠</span></div>
+            <div class="card"><span class="card__rank">Q</span><span class="card__suit">♦</span></div>
+          </div>
+          <div>
+            <div class="hud">
+              <div class="stat"><span class="stat__label">Ronda</span><span class="stat__value">3</span></div>
+              <div class="stat"><span class="stat__label">Ante</span><span class="stat__value">2</span></div>
+              <div class="stat"><span class="stat__label">Dinero</span><span class="stat__value">$18</span></div>
+            </div>
+            <button class="cta">Jugar mano</button>
+          </div>
+        </div>
+      </div>
+      <div class="caption">
+        <h3>2 · Fantasía ilustrada</h3>
+        <p>Púrpura de anochecer, ascuas naranjas, cartas con peso de pergamino. Personalidad tipo Balatro/Slay the Spire.</p>
+        <div class="tag-row"><span class="tag">Vivo</span><span class="tag">Con carácter</span><span class="tag">Ambiente mágico</span></div>
+      </div>
+    </div>
+
+    <div class="slot">
+      <div class="mock mock--neon">
+        <div class="floor"></div>
+        <div class="mock__frame">
+          <div>
+            <div class="title">ROYALE_CLIMB</div>
+            <div class="subtitle">Arcade Mode</div>
+          </div>
+          <div class="cards">
+            <div class="card"><span class="card__rank">K</span><span class="card__suit">♥</span></div>
+            <div class="card"><span class="card__rank">A</span><span class="card__suit">♠</span></div>
+            <div class="card"><span class="card__rank">Q</span><span class="card__suit">♦</span></div>
+          </div>
+          <div>
+            <div class="hud">
+              <div class="stat"><span class="stat__label">Ronda</span><span class="stat__value">03</span></div>
+              <div class="stat"><span class="stat__label">Ante</span><span class="stat__value">02</span></div>
+              <div class="stat"><span class="stat__label">Dinero</span><span class="stat__value">$18</span></div>
+            </div>
+            <button class="cta">▶ Jugar</button>
+          </div>
+        </div>
+      </div>
+      <div class="caption">
+        <h3>3 · Arcade neón</h3>
+        <p>Synthwave: violeta profundo, magenta y cian a todo brillo, suelo en perspectiva. Energía de recreativa de los 80.</p>
+        <div class="tag-row"><span class="tag">Intenso</span><span class="tag">Retro-futurista</span><span class="tag">Alto contraste</span></div>
+      </div>
+    </div>
+
+    <div class="slot">
+      <div class="mock mock--mini">
+        <div class="mock__frame">
+          <div>
+            <div class="title">Royale Climb</div>
+            <div class="subtitle">Ronda 3</div>
+          </div>
+          <div class="cards">
+            <div class="card"><span class="card__rank">K</span><span class="card__suit">♥</span></div>
+            <div class="card"><span class="card__rank">A</span><span class="card__suit">♠</span></div>
+            <div class="card"><span class="card__rank">Q</span><span class="card__suit">♦</span></div>
+          </div>
+          <div>
+            <div class="hud">
+              <div class="stat"><span class="stat__label">Ante</span><span class="stat__value">2</span></div>
+              <div class="stat"><span class="stat__label">Dinero</span><span class="stat__value">$18</span></div>
+            </div>
+            <button class="cta">Jugar mano</button>
+          </div>
+        </div>
+      </div>
+      <div class="caption">
+        <h3>4 · Minimalista premium</h3>
+        <p>Casi sin adornos: tipografía como protagonista, mucho negro, un único acento por color de palo. Elegancia por sobriedad, tipo app Apple.</p>
+        <div class="tag-row"><span class="tag">Limpio</span><span class="tag">Contenido</span><span class="tag">Precisión</span></div>
+      </div>
+    </div>
+  </div>
+</div>
