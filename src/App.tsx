@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from "react";
+import { RelicBadge } from "./relicIcons";
 
 /* ============================================================
    ROYALE CLIMB — Roguelike de cartas con combos de póker
@@ -62,6 +63,12 @@ const RARITY_TEXT: Record<Rarity, string> = {
   rare: "text-sky-300",
   epic: "text-fuchsia-300",
   legendary: "text-amber-300",
+};
+const RARITY_ACCENT: Record<Rarity, string> = {
+  common: "border-slate-400 text-slate-300",
+  rare: "border-sky-400 text-sky-300",
+  epic: "border-fuchsia-400 text-fuchsia-300",
+  legendary: "border-amber-300 text-amber-300",
 };
 const RARITY_GLOW: Record<Rarity, string> = {
   common: "",
@@ -836,9 +843,9 @@ function RelicChip({ relic }: { relic: Relic }) {
   return (
     <Tooltip text={relic.desc}>
       <div
-        className={`flex items-center gap-1 rounded-lg border bg-[#12101c]/90 px-2 py-1 ring-1 ${RARITY_RING[relic.rarity]} ${RARITY_GLOW[relic.rarity]}`}
+        className={`flex items-center gap-1.5 rounded-lg border bg-[#12101c]/90 py-1 pl-1 pr-2 ring-1 ${RARITY_RING[relic.rarity]} ${RARITY_GLOW[relic.rarity]}`}
       >
-        <span className="text-base">{relic.icon}</span>
+        <RelicBadge id={relic.id} size={22} ringClass={RARITY_ACCENT[relic.rarity]} />
         <span className={`text-xs font-semibold ${RARITY_TEXT[relic.rarity]}`}>
           {relic.name}
         </span>
@@ -1526,17 +1533,24 @@ function RewardScreen({
           <button
             key={r.id}
             onClick={() => onChoose(r)}
-            className={`rc-panel rc-panel__corners group flex flex-col items-center gap-2 p-5 ring-1 transition-transform hover:scale-[1.04] active:scale-95 ${RARITY_RING[r.rarity]} ${RARITY_GLOW[r.rarity]}`}
+            className={`rc-panel rc-panel__corners group relative flex flex-col items-center gap-2 overflow-hidden p-5 ring-1 transition-transform hover:scale-[1.04] active:scale-95 ${RARITY_RING[r.rarity]} ${RARITY_GLOW[r.rarity]}`}
           >
-            <span className="text-4xl transition-transform group-hover:scale-110">
-              {r.icon}
-            </span>
+            <div
+              className={`pointer-events-none absolute inset-0 opacity-[0.14] ${RARITY_TEXT[r.rarity]}`}
+              style={{
+                background:
+                  "radial-gradient(circle at 50% 0%, currentColor, transparent 65%)",
+              }}
+            />
+            <div className="relative transition-transform group-hover:scale-110">
+              <RelicBadge id={r.id} size={56} ringClass={RARITY_ACCENT[r.rarity]} />
+            </div>
             <span
-              className={`text-xs font-black uppercase tracking-wider ${RARITY_TEXT[r.rarity]}`}
+              className={`relative text-xs font-black uppercase tracking-wider ${RARITY_TEXT[r.rarity]}`}
             >
               {r.rarity}
             </span>
-            <span className="text-lg font-bold text-slate-100">{r.name}</span>
+            <span className="relative text-lg font-bold text-slate-100">{r.name}</span>
             <span className="text-xs text-slate-400">{r.desc}</span>
           </button>
         ))}
@@ -1622,12 +1636,19 @@ function ShopScreen({
           return (
             <div
               key={relic.id}
-              className={`rc-panel rc-panel__corners flex items-center gap-3 p-4 ring-1 ${RARITY_RING[relic.rarity]} ${RARITY_GLOW[relic.rarity]} ${
+              className={`rc-panel rc-panel__corners relative flex items-center gap-3 overflow-hidden p-4 ring-1 ${RARITY_RING[relic.rarity]} ${RARITY_GLOW[relic.rarity]} ${
                 bought ? "opacity-40" : ""
               }`}
             >
-              <span className="text-3xl">{relic.icon}</span>
-              <div className="min-w-0 flex-1">
+              <div
+                className={`pointer-events-none absolute inset-0 opacity-[0.12] ${RARITY_TEXT[relic.rarity]}`}
+                style={{
+                  background:
+                    "radial-gradient(circle at 0% 0%, currentColor, transparent 60%)",
+                }}
+              />
+              <RelicBadge id={relic.id} size={44} ringClass={RARITY_ACCENT[relic.rarity]} />
+              <div className="relative min-w-0 flex-1">
                 <div
                   className={`text-sm font-bold ${RARITY_TEXT[relic.rarity]}`}
                 >
@@ -1641,7 +1662,7 @@ function ShopScreen({
                   onBuyRelic(relic, price);
                   setBoughtRelics((b) => [...b, relic.id]);
                 }}
-                className="rc-btn rc-btn-primary shrink-0 px-3 py-2 text-sm"
+                className="rc-btn rc-btn-primary relative shrink-0 px-3 py-2 text-sm"
               >
                 {bought ? "✓" : `${price}`}
               </button>
@@ -1663,23 +1684,28 @@ function ShopScreen({
           return (
             <div
               key={i}
-              className={`rc-panel rc-panel--magenta rc-panel__corners flex flex-col gap-2 p-4 ${
+              className={`rc-panel rc-panel--magenta rc-panel__corners relative flex flex-col items-center gap-2 overflow-hidden p-4 text-center ${
                 used ? "opacity-40" : ""
               }`}
             >
-              <div className="flex items-center gap-2">
-                <span className="text-2xl">{sp.icon}</span>
-                <span
-                  className={`text-sm font-bold ${RARITY_TEXT[sp.rarity]}`}
-                >
-                  {sp.name}
-                </span>
-              </div>
-              <p className="flex-1 text-xs text-slate-400">{sp.desc}</p>
+              <div
+                className="pointer-events-none absolute inset-0 opacity-[0.12] text-fuchsia-300"
+                style={{
+                  background:
+                    "radial-gradient(circle at 50% 0%, currentColor, transparent 65%)",
+                }}
+              />
+              <RelicBadge id={sp.kind} size={40} ringClass={RARITY_ACCENT[sp.rarity]} />
+              <span
+                className={`relative text-sm font-bold ${RARITY_TEXT[sp.rarity]}`}
+              >
+                {sp.name}
+              </span>
+              <p className="relative flex-1 text-xs text-slate-400">{sp.desc}</p>
               <button
                 disabled={used || !afford}
                 onClick={() => setPendingSpecial(sp)}
-                className="rc-btn rc-btn-ghost--magenta px-3 py-2 text-sm"
+                className="rc-btn rc-btn-ghost--magenta relative w-full px-3 py-2 text-sm"
               >
                 {used ? "Usado" : `$${sp.price}`}
               </button>
@@ -1737,9 +1763,14 @@ function ShopScreen({
       {pendingSpecial && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,7,20,0.92)] p-4 backdrop-blur-sm">
           <div className="rc-panel rc-panel__corners max-h-[85vh] w-full max-w-2xl overflow-auto p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h4 className="rc-title text-lg">
-                {pendingSpecial.icon} {pendingSpecial.name}
+            <div className="mb-3 flex items-center gap-2.5">
+              <RelicBadge
+                id={pendingSpecial.kind}
+                size={34}
+                ringClass={RARITY_ACCENT[pendingSpecial.rarity]}
+              />
+              <h4 className="rc-title flex-1 text-lg">
+                {pendingSpecial.name}
               </h4>
               <button
                 onClick={() => setPendingSpecial(null)}
@@ -1882,7 +1913,23 @@ function WinScreen({
 }) {
   return (
     <div className="mx-auto flex min-h-[75vh] max-w-lg flex-col items-center justify-center gap-5 px-4 text-center">
-      <div className="animate-[rcpulse_2s_infinite] text-6xl">🏆</div>
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="#ffe94d"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-16 w-16 animate-[rcpulse_2s_infinite]"
+        style={{ filter: "drop-shadow(0 0 10px rgba(255,233,77,0.8))" }}
+      >
+        <path d="M7 4h10v5a5 5 0 0 1-10 0Z" />
+        <path d="M7 5H4a3 3 0 0 0 3 5" />
+        <path d="M17 5h3a3 3 0 0 1-3 5" />
+        <path d="M12 14v3" />
+        <path d="M8 20h8" />
+        <path d="M9.5 17h5l1 3h-7Z" />
+      </svg>
       <h2 className="rc-title text-4xl">¡ANTE {gs.ante} COMPLETADO!</h2>
       <p className="text-slate-400">
         Has superado {gs.round} rondas.{" "}
