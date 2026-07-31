@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { RelicBadge, RelicCardArt } from "./relicIcons";
-import { PixelSuitGlow, SUIT_RING } from "./pixelSuits";
 
 /* ============================================================
    ROYALE CLIMB — Roguelike de cartas con combos de póker
@@ -217,40 +216,63 @@ function PixelSuit({ suit, px }: { suit: Suit; px: number }) {
   );
 }
 
+/* ---------------- Sprite de figura (J/Q/K) ----------------
+   Un retrato base 16x20 que se tinta con la paleta del palo.
+   La corona cambia ligeramente por rango via overlay. */
+const FACE_16x20: PixGrid = [
+  [0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0],
+  [0,0,0,0,0,1,4,4,4,4,1,0,0,0,0,0],
+  [0,0,0,0,1,4,1,4,4,1,4,1,0,0,0,0],
+  [0,0,0,1,4,4,4,4,4,4,4,4,1,0,0,0],
+  [0,0,1,4,4,4,4,4,4,4,4,4,4,1,0,0],
+  [0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
+  [0,0,0,1,2,2,2,2,2,2,2,2,1,0,0,0],
+  [0,0,0,1,2,3,3,3,3,3,3,2,1,0,0,0],
+  [0,0,0,1,3,4,3,3,3,3,4,3,1,0,0,0],
+  [0,0,0,1,3,1,3,3,3,3,1,3,1,0,0,0],
+  [0,0,0,1,3,3,3,1,1,3,3,3,1,0,0,0],
+  [0,0,0,1,3,3,3,3,3,3,3,3,1,0,0,0],
+  [0,0,0,1,2,3,1,1,1,1,3,2,1,0,0,0],
+  [0,0,0,0,1,2,3,3,3,3,2,1,0,0,0,0],
+  [0,0,0,0,1,2,2,2,2,2,2,1,0,0,0,0],
+  [0,0,1,1,4,4,2,2,2,2,4,4,1,1,0,0],
+  [0,1,4,4,4,4,4,2,2,4,4,4,4,4,1,0],
+  [1,4,4,4,4,4,4,4,4,4,4,4,4,4,4,1],
+  [1,4,4,4,1,4,4,4,4,4,4,1,4,4,4,1],
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+];
+
+/* paleta de figura: contorno oscuro, ropa(sombra), piel(base), oro(brillo) */
+function facePalette(suit: Suit): [string, string, string, string] {
+  const isRed = suit === "hearts" || suit === "diamonds";
+  return [
+    "#1a1206",
+    isRed ? "#9f1239" : "#1e3a5f", // ropa
+    "#f0c89a", // piel
+    "#fbbf24", // oro corona/detalle
+  ];
+}
+
 /* ---------------- Reverso de carta ---------------- */
 function CardBack({ w, h }: { w: number; h: number }) {
   return (
-    <div className="rc-card relative" style={{ width: w, height: h }}>
-      <div className="rc-card__frame" />
-      <div className="absolute inset-0 z-[1] flex items-center justify-center">
-        <svg
-          width={w * 0.46}
-          viewBox="0 0 100 100"
-          style={{ filter: "drop-shadow(0 0 6px rgba(232,249,255,.55))" }}
-        >
-          <defs>
-            <linearGradient id="rc-back-grad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#00e5ff" />
-              <stop offset="1" stopColor="#ff2ea1" />
-            </linearGradient>
-          </defs>
-          <polygon
-            points="50,4 94,50 50,96 6,50"
-            fill="none"
-            stroke="url(#rc-back-grad)"
-            strokeWidth={3}
-          />
-          <text
-            x="50"
-            y="59"
-            textAnchor="middle"
-            fontFamily="'Press Start 2P', monospace"
-            fontSize="20"
-            fill="#eafcff"
-          >
-            RC
-          </text>
-        </svg>
+    <div
+      className="relative overflow-hidden border-[3px] border-slate-950"
+      style={{ width: w, height: h }}
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-950" />
+      <div
+        className="absolute inset-0 opacity-40"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(45deg, #fbbf2433 0 4px, transparent 4px 8px), repeating-linear-gradient(-45deg, #818cf833 0 4px, transparent 4px 8px)",
+        }}
+      />
+      <div className="absolute inset-1.5 border-2 border-amber-400/40" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="text-amber-300/70" style={{ fontSize: w * 0.4 }}>
+          ♛
+        </div>
       </div>
     </div>
   );
@@ -645,105 +667,160 @@ function PlayingCard({
   small?: boolean;
   scoring?: boolean;
 }) {
-  const w = small ? 58 : 80;
-  const h = small ? 82 : 112;
+  const w = small ? 56 : 76;
+  const h = small ? 80 : 108;
   const isFace = card.rank >= 11 && card.rank <= 13;
-  const isRed = card.suit === "hearts" || card.suit === "diamonds";
-  const ring = SUIT_RING[card.suit];
+  const isAce = card.rank === 14;
+  const suitPal = SUIT_PALETTE[card.suit];
+  const cornerHex =
+    card.suit === "hearts"
+      ? "#e11d48"
+      : card.suit === "diamonds"
+      ? "#d97706"
+      : "#1e293b";
 
-  const materialTint = card.glass
-    ? "rgba(0,229,255,0.1)"
+  const bodyBg = card.glass
+    ? "linear-gradient(135deg, #cffafe 0%, #a5f3fc 45%, #e0f2fe 100%)"
     : card.steel
-    ? "rgba(226,232,240,0.12)"
+    ? "linear-gradient(135deg, #e2e8f0 0%, #94a3b8 50%, #cbd5e1 100%)"
     : card.gold
-    ? "rgba(255,233,77,0.14)"
-    : "transparent";
+    ? "linear-gradient(135deg, #fef3c7 0%, #fcd34d 50%, #fffbeb 100%)"
+    : "linear-gradient(160deg, #fafafa 0%, #f1f5f9 60%, #e2e8f0 100%)";
 
-  const cornerPx = small ? 1.1 : 1.5;
-  const bigPx = small ? 2.2 : 3.1;
+  const cornerPx = small ? 1 : 1.4;
+  const centerPx = small ? 2 : 3;
 
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      style={{ width: w, height: h }}
+      style={{
+        width: w,
+        height: h,
+        background: bodyBg,
+        border: `3px solid ${selected ? "#fcd34d" : "#0b0f1a"}`,
+        boxShadow: selected
+          ? "0 0 0 2px #0b0f1a, 0 7px 0 0 #92400e, 0 0 20px -2px rgba(252,211,77,0.85)"
+          : "0 4px 0 0 #1e293b, 0 5px 6px -2px rgba(0,0,0,0.5)",
+      }}
       className={[
-        "rc-card relative shrink-0 transition-all duration-150",
-        isRed ? "rc-red" : "",
+        "relative shrink-0 overflow-hidden transition-all duration-150",
         selected ? "-translate-y-4 z-20" : "hover:-translate-y-2 hover:z-10 z-0",
         scoring ? "animate-[rcscorepop_0.5s_ease-out] z-30" : "",
         disabled ? "opacity-60 cursor-default" : "cursor-pointer",
       ].join(" ")}
     >
-      {materialTint !== "transparent" && (
-        <div
-          className="absolute inset-0 z-[1]"
-          style={{ background: materialTint }}
-        />
-      )}
-      <div
-        className="rc-card__frame"
-        style={selected ? { borderColor: "#ffe94d", boxShadow: "0 0 10px #ffe94d" } : undefined}
-      />
+      {/* marca de seleccionada */}
       {selected && (
-        <div className="absolute -top-2.5 left-1/2 z-40 -translate-x-1/2 whitespace-nowrap rounded-sm border border-black/40 bg-amber-300 px-1.5 text-[8px] font-black uppercase tracking-wide text-slate-950">
+        <div className="absolute -top-3 left-1/2 z-40 -translate-x-1/2 whitespace-nowrap rounded-sm border-2 border-slate-950 bg-amber-300 px-1.5 text-[9px] font-black uppercase tracking-wide text-slate-950">
           elegida
         </div>
       )}
 
+      {/* textura sutil */}
+      <div
+        className="absolute inset-0 opacity-[0.12]"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(0deg, #00000022 0 1px, transparent 1px 3px)",
+        }}
+      />
+      {/* marco interior decorativo */}
+      <div
+        className="absolute inset-1 border"
+        style={{ borderColor: cornerHex + "55" }}
+      />
+
       {/* esquina superior izquierda */}
-      <div className="absolute top-1 left-1 z-10 flex flex-col items-center gap-0.5 leading-none">
+      <div className="absolute top-0.5 left-1 z-10 flex flex-col items-center leading-none">
         <span
-          className={`rc-num ${isRed ? "text-rose-300" : "text-cyan-200"} ${small ? "text-[7px]" : "text-[8px]"}`}
-          style={{ textShadow: `0 0 4px ${ring}` }}
+          className={`font-black ${small ? "text-[11px]" : "text-sm"}`}
+          style={{ fontFamily: "ui-monospace, monospace", color: cornerHex }}
         >
           {rankLabel(card.rank)}
         </span>
-        <PixelSuitGlow suit={card.suit} px={cornerPx} glow={false} />
+        <div className="mt-0.5">
+          <PixSprite
+            grid={SUIT_SPRITE[card.suit]}
+            px={cornerPx}
+            palette={suitPal}
+          />
+        </div>
       </div>
 
       {/* esquina inferior derecha (rotada) */}
-      <div className="absolute bottom-1 right-1 z-10 flex rotate-180 flex-col items-center gap-0.5 leading-none">
+      <div className="absolute bottom-0.5 right-1 z-10 flex rotate-180 flex-col items-center leading-none">
         <span
-          className={`rc-num ${isRed ? "text-rose-300" : "text-cyan-200"} ${small ? "text-[7px]" : "text-[8px]"}`}
-          style={{ textShadow: `0 0 4px ${ring}` }}
+          className={`font-black ${small ? "text-[11px]" : "text-sm"}`}
+          style={{ fontFamily: "ui-monospace, monospace", color: cornerHex }}
         >
           {rankLabel(card.rank)}
         </span>
-        <PixelSuitGlow suit={card.suit} px={cornerPx} glow={false} />
+        <div className="mt-0.5">
+          <PixSprite
+            grid={SUIT_SPRITE[card.suit]}
+            px={cornerPx}
+            palette={suitPal}
+          />
+        </div>
       </div>
 
       {/* contenido central */}
-      <div className="absolute inset-0 z-[1] flex items-center justify-center">
+      <div className="absolute inset-0 flex items-center justify-center">
         <div className={scoring ? "animate-[rcspin_0.5s_ease-out]" : ""}>
           {isFace ? (
-            <div className="flex flex-col items-center gap-1">
-              <span
-                className={`rc-num ${isRed ? "text-rose-200" : "text-cyan-100"} ${small ? "text-base" : "text-xl"}`}
-                style={{ textShadow: `0 0 8px ${ring}, 0 0 16px ${ring}` }}
-              >
-                {rankLabel(card.rank)}
-              </span>
-              <PixelSuitGlow suit={card.suit} px={small ? 1.6 : 2.1} />
+            <div className="relative flex items-center justify-center">
+              <div
+                className="absolute -inset-1 rounded-sm border"
+                style={{ borderColor: cornerHex + "66" }}
+              />
+              <PixSprite
+                grid={FACE_16x20}
+                px={small ? 1.7 : 2.3}
+                palette={facePalette(card.suit)}
+              />
+            </div>
+          ) : isAce ? (
+            <div className="relative flex items-center justify-center">
+              <div
+                className="absolute h-[2px] w-10 rotate-45"
+                style={{ background: cornerHex + "44" }}
+              />
+              <div
+                className="absolute h-[2px] w-10 -rotate-45"
+                style={{ background: cornerHex + "44" }}
+              />
+              <PixSprite
+                grid={SUIT_SPRITE[card.suit]}
+                px={small ? 2.6 : 3.6}
+                palette={suitPal}
+              />
             </div>
           ) : (
-            <PixelSuitGlow suit={card.suit} px={bigPx} />
+            <PixSprite
+              grid={SUIT_SPRITE[card.suit]}
+              px={centerPx}
+              palette={suitPal}
+            />
           )}
         </div>
       </div>
 
       {/* badge de material especial */}
       {(card.glass || card.steel || card.gold) && (
-        <div className="absolute bottom-1 left-1.5 z-10 text-[7px] font-black uppercase tracking-tight">
-          {card.glass && <span className="text-cyan-300">vidrio</span>}
-          {card.steel && <span className="text-slate-200">acero</span>}
-          {card.gold && <span className="text-amber-300">oro</span>}
+        <div className="absolute bottom-0.5 left-1 z-10 text-[9px] font-black uppercase tracking-tight">
+          {card.glass && <span className="text-cyan-700">vidrio</span>}
+          {card.steel && <span className="text-slate-700">acero</span>}
+          {card.gold && <span className="text-amber-700">oro</span>}
         </div>
       )}
 
+      {/* brillo diagonal */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-white/40 to-transparent opacity-50" />
+
       {/* etiqueta de bonus de fichas */}
       {card.bonusChips > 0 && (
-        <div className="rc-num absolute -top-2 -right-2 z-30 rounded-sm border border-black/50 bg-sky-400 px-1 text-[8px] leading-tight text-slate-950 shadow-[0_0_8px_rgba(56,189,248,0.8)]">
+        <div className="absolute -top-2 -right-2 z-30 border-2 border-slate-950 bg-sky-500 px-1 text-[10px] font-black leading-tight text-slate-950 shadow-[2px_2px_0_0_#000]">
           +{card.bonusChips}
         </div>
       )}
