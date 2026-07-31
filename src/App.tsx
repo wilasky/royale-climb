@@ -1,39 +1,34 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { RelicBadge, RelicCardArt } from "./relicIcons";
+import type {
+  Suit,
+  Rarity,
+  Screen,
+  Card,
+  Relic,
+  ShopSpecial,
+  GameState,
+  ScoreBreakdown,
+} from "./game/types";
+import { makeRng, shuffle } from "./game/rng";
+import type { Rng } from "./game/rng";
+import { scorePlay, glassRisk, diamondMoneyPreview } from "./game/scoring";
+import {
+  targetForRound,
+  anteOfRound,
+  resolveAfterReward,
+  resolveAfterShop,
+  beginEndlessContinuation,
+} from "./game/progression";
+import { phaseForRound } from "./game/progression";
+import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT } from "./game/config";
+import { pickRelics } from "./game/rewards";
 
 /* ============================================================
    ROYALE CLIMB — Roguelike de cartas con combos de póker
    Un solo archivo. React + TS + Tailwind core. Pixel-art CSS puro.
+   Lógica de juego pura extraída a src/game/* (ver docs/CHANGELOG_GAMEPLAY.md).
    ============================================================ */
-
-/* ---------------- Tipos ---------------- */
-export type Suit = "spades" | "hearts" | "diamonds" | "clubs";
-type Rarity = "common" | "rare" | "epic" | "legendary";
-type Screen = "menu" | "play" | "reward" | "shop" | "defeat" | "win";
-
-interface Card {
-  id: string;
-  suit: Suit;
-  rank: number; // 2..14 (11=J,12=Q,13=K,14=A)
-  bonusChips: number;
-  glass: boolean;
-  steel: boolean;
-  gold: boolean;
-}
-
-interface Relic {
-  id: string;
-  name: string;
-  desc: string;
-  rarity: Rarity;
-  icon: string;
-}
-
-interface HandResult {
-  name: string;
-  baseChips: number;
-  baseMult: number;
-}
 
 /* ---------------- Constantes ---------------- */
 const SUITS: Suit[] = ["spades", "hearts", "diamonds", "clubs"];
@@ -343,27 +338,6 @@ function ParticleLayer({ particles }: { particles: Particle[] }) {
   );
 }
 
-/* ---------------- RNG con semilla (mulberry32) ---------------- */
-function makeRng(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-type Rng = () => number;
-const shuffle = <T,>(rng: Rng, arr: T[]): T[] => {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-};
-
 let cardCounter = 0;
 const newCard = (suit: Suit, rank: number): Card => ({
   id: `c${cardCounter++}`,
@@ -381,57 +355,6 @@ function buildStartingDeck(): Card[] {
   for (const s of SUITS) for (let r = 2; r <= 14; r++) deck.push(newCard(s, r));
   return deck;
 }
-
-/* ---------------- Evaluación de combinaciones ---------------- */
-function evaluateHand(cards: Card[]): HandResult {
-  if (cards.length === 0) return { name: "—", baseChips: 0, baseMult: 0 };
-  const ranks = cards.map((c) => c.rank).sort((a, b) => a - b);
-  const suits = cards.map((c) => c.suit);
-  const counts: Record<number, number> = {};
-  ranks.forEach((r) => (counts[r] = (counts[r] || 0) + 1));
-  const countVals = Object.values(counts).sort((a, b) => b - a);
-  const uniqueRanks = Object.keys(counts).length;
-
-  const isFlush = cards.length === 5 && suits.every((s) => s === suits[0]);
-  const reds = cards.filter(
-    (c) => c.suit === "hearts" || c.suit === "diamonds"
-  ).length;
-  const isSpectrum =
-    cards.length === 5 && (reds === 5 || reds === 0) && !isFlush;
-
-  let isStraight = false;
-  if (cards.length === 5 && uniqueRanks === 5) {
-    const lo = ranks[0];
-    isStraight = ranks.every((r, i) => r === lo + i);
-    if (!isStraight) {
-      const alt = [...ranks];
-      if (alt[4] === 14) {
-        const low = [2, 3, 4, 5, 14].sort((a, b) => a - b);
-        isStraight = JSON.stringify(alt) === JSON.stringify(low);
-      }
-    }
-  }
-
-  if (isStraight && isFlush)
-    return { name: "Escalera de color", baseChips: 100, baseMult: 8 };
-  if (countVals[0] === 4) return { name: "Póker", baseChips: 60, baseMult: 7 };
-  if (countVals[0] === 3 && countVals[1] === 2)
-    return { name: "Full", baseChips: 40, baseMult: 4 };
-  if (isFlush) return { name: "Color", baseChips: 35, baseMult: 4 };
-  if (isStraight) return { name: "Escalera", baseChips: 30, baseMult: 4 };
-  if (isSpectrum) return { name: "Espectro", baseChips: 45, baseMult: 5 };
-  if (countVals[0] === 3) return { name: "Trío", baseChips: 30, baseMult: 3 };
-  if (countVals[0] === 2 && countVals[1] === 2)
-    return { name: "Doble pareja", baseChips: 20, baseMult: 2 };
-  if (countVals[0] === 2) return { name: "Pareja", baseChips: 10, baseMult: 2 };
-  return { name: "Carta alta", baseChips: 5, baseMult: 1 };
-}
-
-const chipValueOfRank = (r: number): number => {
-  if (r === 14) return 11;
-  if (r >= 11) return 10;
-  return r;
-};
 
 /* ---------------- Catálogo de modificadores ---------------- */
 const RELIC_POOL: Relic[] = [
@@ -462,15 +385,6 @@ const RELIC_POOL: Relic[] = [
 ];
 
 /* ---------------- Cartas especiales para tienda ---------------- */
-type SpecialCardKind = "glass" | "steel" | "gold" | "bonus" | "suitconv";
-interface ShopSpecial {
-  kind: SpecialCardKind;
-  name: string;
-  desc: string;
-  price: number;
-  rarity: Rarity;
-  icon: string;
-}
 const SPECIAL_DEFS: ShopSpecial[] = [
   { kind: "bonus", name: "Tinta Brillante", desc: "Da +30 fichas planas a una carta.", price: 4, rarity: "common", icon: "✨" },
   { kind: "glass", name: "Cristal Frágil", desc: "Carta x2 puntos, 25% de romperse al jugarla.", price: 5, rarity: "rare", icon: "🔮" },
@@ -478,174 +392,6 @@ const SPECIAL_DEFS: ShopSpecial[] = [
   { kind: "gold", name: "Lámina de Oro", desc: "Si está en mano al fin de ronda: +3$.", price: 5, rarity: "rare", icon: "🪙" },
   { kind: "suitconv", name: "Tintura de Palo", desc: "Convierte el palo de una carta al que elijas.", price: 4, rarity: "common", icon: "🎨" },
 ];
-
-/* ---------------- Estado del juego ---------------- */
-interface GameState {
-  seed: number;
-  round: number;
-  ante: number;
-  money: number;
-  deck: Card[];
-  drawPile: Card[];
-  hand: Card[];
-  discardPile: Card[];
-  relics: Relic[];
-  handsLeft: number;
-  discardsLeft: number;
-  handsPerRound: number;
-  discardsPerRound: number;
-  handSize: number;
-  scoreThisRound: number;
-  target: number;
-  discardsUsedThisRound: number;
-  permaMult: number;
-  history: { hand: string; score: number; round: number }[];
-  endless: boolean;
-  stats: { handsPlayed: number; bestHand: number; totalScore: number };
-}
-
-/* ---------------- Lógica de puntuación ---------------- */
-interface ScoreBreakdown {
-  handName: string;
-  chips: number;
-  mult: number;
-  total: number;
-  lines: string[];
-}
-
-function scorePlay(
-  played: Card[],
-  heldInHand: Card[],
-  gs: GameState,
-  isFirstHand: boolean,
-  isLastHand: boolean
-): ScoreBreakdown {
-  const hr = evaluateHand(played);
-  const has = (id: string) => gs.relics.some((r) => r.id === id);
-  let chips = hr.baseChips;
-  let mult = hr.baseMult;
-  const lines: string[] = [
-    `${hr.name}: ${hr.baseChips} fichas × ${hr.baseMult}`,
-  ];
-
-  for (const c of played) {
-    let v = chipValueOfRank(c.rank) + c.bonusChips;
-    if (c.glass) v *= has("glass_master") ? 4 : 2;
-    chips += v;
-  }
-
-  const spadeN = played.filter((c) => c.suit === "spades").length;
-  const heartN = played.filter((c) => c.suit === "hearts").length;
-  const clubN = played.filter((c) => c.suit === "clubs").length;
-
-  if (has("spades_chip") && spadeN) {
-    chips += spadeN * 12;
-    lines.push(`Filo Negro: +${spadeN * 12} fichas`);
-  }
-  if (has("clubs_chip") && clubN) {
-    chips += clubN * 10;
-    lines.push(`Garrote Pesado: +${clubN * 10} fichas`);
-  }
-  if (has("hearts_mult") && heartN) {
-    mult += heartN;
-    lines.push(`Pulso Carmesí: +${heartN} Mult`);
-  }
-
-  if (has("pair_mult") && hr.name === "Pareja") {
-    mult += 6;
-    lines.push("Eco Gemelo: +6 Mult");
-  }
-  if (has("flush_chips") && hr.name === "Color") {
-    chips += 60;
-    lines.push("Marea Cromática: +60 fichas");
-  }
-  if (
-    has("straight_mult") &&
-    (hr.name === "Escalera" || hr.name === "Escalera de color")
-  ) {
-    mult += 5;
-    lines.push("Senda Recta: +5 Mult");
-  }
-  if (has("pair_chain") && hr.name === "Doble pareja") {
-    mult += 4;
-    chips += 30;
-    lines.push("Cadena Doble: +30 fichas, +4 Mult");
-  }
-  if (has("spectrum_boost") && hr.name === "Espectro") {
-    mult *= 3;
-    lines.push("Prisma Roto: ×3 Mult");
-  }
-
-  const lowN = played.filter((c) => c.rank >= 2 && c.rank <= 6).length;
-  if (has("low_card_chip") && lowN) {
-    chips += lowN * 18;
-    lines.push(`Plebe Útil: +${lowN * 18} fichas`);
-  }
-  const faceN = played.filter((c) => c.rank >= 11 && c.rank <= 13).length;
-  if (has("face_mult") && faceN) {
-    mult += faceN * 2;
-    lines.push(`Corte Noble: +${faceN * 2} Mult`);
-  }
-  const aceN = played.filter((c) => c.rank === 14).length;
-  if (has("ace_chip") && aceN) {
-    chips += aceN * 25;
-    lines.push(`As bajo la Manga: +${aceN * 25} fichas`);
-  }
-
-  const steelN = heldInHand.filter((c) => c.steel).length;
-  if (steelN) {
-    mult += steelN * 1.5;
-    lines.push(`Núcleo de Acero ×${steelN}: +${steelN * 1.5} Mult`);
-  }
-
-  if (has("small_hand") && played.length <= 2) {
-    chips += 50;
-    mult += 4;
-    lines.push("Minimalista: +50 fichas, +4 Mult");
-  }
-  if (has("even_odd") && played.every((c) => c.rank % 2 === 0)) {
-    mult *= 4;
-    lines.push("Equilibrio Par: ×4 Mult");
-  }
-  if (has("first_hand_mult") && isFirstHand) {
-    mult *= 3;
-    lines.push("Salida en Falso: ×3 Mult");
-  }
-  if (has("final_hand") && isLastHand) {
-    mult *= 4;
-    lines.push("Última Palabra: ×4 Mult");
-  }
-  if (has("no_discard_mult") && gs.discardsUsedThisRound === 0) {
-    mult *= 2;
-    lines.push("Mano Firme: ×2 Mult");
-  }
-
-  if (has("the_collector")) {
-    mult += gs.relics.length * 3;
-    lines.push(`El Coleccionista: +${gs.relics.length * 3} Mult`);
-  }
-  if (has("blood_pact")) {
-    mult *= 2.5;
-    lines.push("Pacto de Sangre: ×2.5 Mult");
-  }
-  if (gs.permaMult > 0) {
-    mult += gs.permaMult;
-    lines.push(`Bola de Nieve: +${gs.permaMult.toFixed(1)} Mult`);
-  }
-
-  mult = Math.max(0, mult);
-  const total = Math.round(chips * mult);
-  return {
-    handName: hr.name,
-    chips: Math.round(chips),
-    mult: Math.round(mult * 10) / 10,
-    total,
-    lines,
-  };
-}
-
-const targetForRound = (round: number): number =>
-  Math.round(200 * Math.pow(1.55, round - 1));
 
 /* ============================================================
    COMPONENTES UI
@@ -1078,10 +824,22 @@ function PlayScreen({
   const handRef = useRef<HTMLDivElement>(null);
   const rng = useRef(makeRng(gs.seed + gs.round * 7919));
 
+  const isFirstHand = gs.handsLeft === gs.handsPerRound;
+  const isLastHand = gs.handsLeft === 1;
+
+  // Previsualización real (docs/GAME_AUDIT.md P0-3): usa exactamente
+  // scorePlay, la misma función que playHand() usa para puntuar de
+  // verdad, con los mismos argumentos. No consume RNG ni muta nada -
+  // glassRisk/diamondMoneyPreview son puramente informativos.
   const preview = useMemo(() => {
-    const cards = gs.hand.filter((c) => selected.includes(c.id));
-    return evaluateHand(cards);
-  }, [selected, gs.hand]);
+    const played = gs.hand.filter((c) => selected.includes(c.id));
+    if (played.length === 0) return null;
+    const held = gs.hand.filter((c) => !selected.includes(c.id));
+    const breakdown = scorePlay(played, held, gs, isFirstHand, isLastHand);
+    const glass = glassRisk(played, gs.relics);
+    const moneyGain = diamondMoneyPreview(played, gs.relics);
+    return { breakdown, glass, moneyGain };
+  }, [selected, gs, isFirstHand, isLastHand]);
 
   const toggle = (id: string) => {
     setSelected((s) => {
@@ -1114,24 +872,23 @@ function PlayScreen({
     return { ...g, drawPile: draw, discardPile: disc, hand };
   };
 
-  const isFirstHand = gs.handsLeft === gs.handsPerRound;
-  const isLastHand = gs.handsLeft === 1;
-
   const playHand = () => {
     if (selected.length === 0 || gs.handsLeft <= 0) return;
     const played = gs.hand.filter((c) => selected.includes(c.id));
     const held = gs.hand.filter((c) => !selected.includes(c.id));
     const bd = scorePlay(played, held, gs, isFirstHand, isLastHand);
+    const moneyGain = diamondMoneyPreview(played, gs.relics);
 
-    const diamN = played.filter((c) => c.suit === "diamonds").length;
-    const hasDiamMoney = gs.relics.some((r) => r.id === "diamonds_money");
-    const moneyGain = hasDiamMoney ? diamN : 0;
-
-    const glassMaster = gs.relics.some((r) => r.id === "glass_master");
+    // Misma probabilidad que se muestra en la previsualización
+    // (glassRisk) - aquí sí se consume RNG, porque esto es la
+    // ejecución real, no la previsualización.
+    const { immune, breakChancePercent } = glassRisk(played, gs.relics);
     const brokenIds = new Set<string>();
-    if (!glassMaster) {
+    if (!immune) {
       for (const c of played) {
-        if (c.glass && rng.current() < 0.25) brokenIds.add(c.id);
+        if (c.glass && rng.current() < breakChancePercent / 100) {
+          brokenIds.add(c.id);
+        }
       }
     }
 
@@ -1323,19 +1080,51 @@ function PlayScreen({
       >
         <div className="relative z-10">
           <div className="text-xs uppercase tracking-wider text-slate-500">
-            {selected.length > 0
-              ? "Combinación detectada"
-              : "Toca cartas para elegirlas"}
+            {preview ? "Combinación detectada" : "Toca cartas para elegirlas"}
           </div>
           <div className="text-2xl font-black text-slate-100">
-            {selected.length > 0 ? preview.name : "—"}
+            {preview ? preview.breakdown.handName : "—"}
           </div>
-          {selected.length > 0 && (
-            <div className="font-mono text-sm">
-              <span className="text-sky-300">{preview.baseChips} fichas</span>
-              <span className="text-slate-500"> × </span>
-              <span className="text-rose-300">{preview.baseMult} mult</span>
-            </div>
+          {preview && (
+            <>
+              <div className="font-mono text-sm">
+                <span className="text-sky-300">
+                  {preview.breakdown.chips} fichas
+                </span>
+                <span className="text-slate-500"> × </span>
+                <span className="text-rose-300">
+                  {preview.breakdown.mult} mult
+                </span>
+                <span className="text-slate-500"> = </span>
+                <span className="font-bold text-amber-300">
+                  {preview.breakdown.total.toLocaleString()}
+                </span>
+              </div>
+              {preview.breakdown.lines.length > 1 && (
+                <div className="mt-1 flex max-w-md flex-wrap gap-1">
+                  {preview.breakdown.lines.slice(1).map((l, i) => (
+                    <span
+                      key={i}
+                      className="rounded bg-slate-800/70 px-1.5 py-0.5 text-[10px] text-slate-300"
+                    >
+                      {l}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {preview.glass.count > 0 && (
+                <div className="mt-1 text-[10px] text-cyan-300">
+                  {preview.glass.immune
+                    ? `${preview.glass.count} carta(s) de cristal — no se romperán (Maestro del Vidrio)`
+                    : `Riesgo: ${preview.glass.count} carta(s) de cristal, ${preview.glass.breakChancePercent}% de romperse cada una al jugar`}
+                </div>
+              )}
+              {preview.moneyGain > 0 && (
+                <div className="mt-0.5 text-[10px] text-emerald-300">
+                  +{preview.moneyGain}$ al jugar (Veta Dorada)
+                </div>
+              )}
+            </>
           )}
         </div>
         <div className="relative z-10 text-right">
@@ -1529,8 +1318,8 @@ function RewardScreen({
 }) {
   const offers = useMemo(() => {
     const owned = new Set(gs.relics.map((r) => r.id));
-    const avail = RELIC_POOL.filter((r) => !owned.has(r.id));
-    return shuffle(rng, avail).slice(0, 3);
+    const weights = REWARD_WEIGHTS[phaseForRound(gs.round)];
+    return pickRelics(rng, RELIC_POOL, owned, REWARD_OFFER_COUNT, weights);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1609,10 +1398,8 @@ function ShopScreen({
 
   const stock = useMemo(() => {
     const owned = new Set(gs.relics.map((r) => r.id));
-    const relics = shuffle(
-      rng,
-      RELIC_POOL.filter((r) => !owned.has(r.id))
-    ).slice(0, 2);
+    const weights = SHOP_WEIGHTS[phaseForRound(gs.round)];
+    const relics = pickRelics(rng, RELIC_POOL, owned, SHOP_RELIC_COUNT, weights);
     const priceOf = (rar: Rarity) =>
       rar === "legendary"
         ? 14
@@ -1943,12 +1730,10 @@ function WinScreen({
         <path d="M8 20h8" />
         <path d="M9.5 17h5l1 3h-7Z" />
       </svg>
-      <h2 className="rc-title text-4xl">¡ANTE {gs.ante} COMPLETADO!</h2>
+      <h2 className="rc-title text-4xl">¡PARTIDA COMPLETADA!</h2>
       <p className="text-slate-400">
-        Has superado {gs.round} rondas.{" "}
-        {gs.endless
-          ? "El modo Endless continúa..."
-          : "¡Sigue escalando!"}
+        Has superado las {gs.round} rondas de esta run. Puedes parar aquí, o
+        seguir escalando en Modo Endless desde la ronda {gs.round + 1}.
       </p>
       <div className="grid w-full grid-cols-2 gap-2">
         <StatBox label="Rondas" value={`${gs.round}`} accent="text-amber-300" />
@@ -2017,7 +1802,7 @@ export default function App() {
       let g: GameState = {
         ...base,
         round,
-        ante: Math.ceil(round / 3),
+        ante: anteOfRound(round),
         drawPile,
         hand: [],
         discardPile: [],
@@ -2044,17 +1829,17 @@ export default function App() {
       seed,
       round: 1,
       ante: 1,
-      money: 4,
+      money: STARTING_MONEY,
       deck,
       drawPile: [],
       hand: [],
       discardPile: [],
       relics: [],
-      handsLeft: 4,
-      discardsLeft: 3,
-      handsPerRound: 4,
-      discardsPerRound: 3,
-      handSize: 8,
+      handsLeft: HANDS_PER_ROUND,
+      discardsLeft: DISCARDS_PER_ROUND,
+      handsPerRound: HANDS_PER_ROUND,
+      discardsPerRound: DISCARDS_PER_ROUND,
+      handSize: HAND_SIZE,
       scoreThisRound: 0,
       target: targetForRound(1),
       discardsUsedThisRound: 0,
@@ -2075,15 +1860,24 @@ export default function App() {
     setScreen("reward");
   };
 
+  // Flujo de fin de ronda - ver docs/GAME_AUDIT.md P0-1 y
+  // src/game/progression.ts. La victoria se decide aquí (solo en
+  // Nueva partida, exactamente en la ronda final); la tienda ya no
+  // fuerza nunca la pantalla de victoria al continuar.
   const proceedAfterReward = (g: GameState) => {
     setGs(g);
-    if (g.round % 3 === 0) {
+    const outcome = resolveAfterReward(g.round, g.endless);
+    if (outcome.type === "victory") {
+      setScreen("win");
+      return;
+    }
+    if (outcome.type === "shop") {
       shopRng.current = makeRng(g.seed + g.round * 31337);
       setScreen("shop");
-    } else {
-      setGs(startRound(g, g.round + 1));
-      setScreen("play");
+      return;
     }
+    setGs(startRound(g, g.round + 1));
+    setScreen("play");
   };
 
   const handleReward = (relic: Relic) => {
@@ -2097,11 +1891,8 @@ export default function App() {
 
   const handleContinueFromShop = () => {
     if (!gs) return;
-    if (gs.round % 3 === 0) {
-      setScreen("win");
-      return;
-    }
-    setGs(startRound(gs, gs.round + 1));
+    const { nextRound } = resolveAfterShop(gs.round);
+    setGs(startRound(gs, nextRound));
     setScreen("play");
   };
 
@@ -2140,7 +1931,8 @@ export default function App() {
 
   const handleContinueEndless = () => {
     if (!gs) return;
-    setGs(startRound({ ...gs, endless: true }, gs.round + 1));
+    const { round, endless } = beginEndlessContinuation(gs.round);
+    setGs(startRound({ ...gs, endless }, round));
     setScreen("play");
   };
 
