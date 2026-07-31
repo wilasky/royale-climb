@@ -1,1 +1,263 @@
 @import "tailwindcss";
+
+/* ============================================================
+   ROYALE CLIMB — sistema de diseño "Neon Arcade"
+   Tokens + clases reutilizables para toda la interfaz (no las cartas,
+   esas siguen con su propio sistema de sprites pixel-art).
+   ============================================================ */
+:root {
+  --rc-void: #0a0714;
+  --rc-void-2: #150f24;
+  --rc-panel: #12101c;
+  --rc-panel-2: #1b1730;
+  --rc-line: rgba(0, 229, 255, 0.28);
+  --rc-line-magenta: rgba(255, 46, 161, 0.32);
+  --rc-cyan: #00e5ff;
+  --rc-magenta: #ff2ea1;
+  --rc-violet: #a855f7;
+  --rc-gold: #ffe94d;
+  --rc-ink: #f3f1ff;
+  --rc-ink-dim: #9a93b5;
+  --rc-font-display: "Courier New", ui-monospace, "Cascadia Code", monospace;
+}
+
+body {
+  background: var(--rc-void);
+  color: var(--rc-ink);
+}
+
+/* ---------- fondo de mesa: suelo en perspectiva + viñeta + scanlines ---------- */
+.rc-arena {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  background:
+    radial-gradient(ellipse at 50% -10%, #241a3f 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 110%, #1a0f30 0%, transparent 60%),
+    var(--rc-void);
+  overflow-x: hidden;
+}
+.rc-arena__floor {
+  position: fixed;
+  left: -30%;
+  right: -30%;
+  bottom: 0;
+  height: 42vh;
+  pointer-events: none;
+  z-index: 0;
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(0, 229, 255, 0.35) 0 2px,
+    transparent 2px 46px
+  );
+  transform: perspective(340px) rotateX(62deg);
+  transform-origin: bottom;
+  mask-image: linear-gradient(180deg, transparent, #000 45%);
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 45%);
+  opacity: 0.55;
+}
+.rc-arena__scanlines {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.025) 0 1px,
+    transparent 1px 3px
+  );
+}
+.rc-arena__glow {
+  position: fixed;
+  left: 50%;
+  top: -10%;
+  width: 70vw;
+  height: 40vh;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    ellipse,
+    rgba(0, 229, 255, 0.14) 0%,
+    rgba(255, 46, 161, 0.08) 45%,
+    transparent 75%
+  );
+  filter: blur(20px);
+}
+
+/* ---------- paneles ---------- */
+.rc-panel {
+  position: relative;
+  background: linear-gradient(160deg, var(--rc-panel-2) 0%, var(--rc-panel) 100%);
+  border: 1px solid var(--rc-line);
+  border-radius: 16px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 20px 40px -24px rgba(0, 0, 0, 0.8);
+}
+.rc-panel--magenta {
+  border-color: var(--rc-line-magenta);
+}
+.rc-panel__corners::before,
+.rc-panel__corners::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--rc-cyan);
+  pointer-events: none;
+  opacity: 0.8;
+}
+.rc-panel__corners::before {
+  top: -1px;
+  left: -1px;
+  border-right: 0;
+  border-bottom: 0;
+}
+.rc-panel__corners::after {
+  bottom: -1px;
+  right: -1px;
+  border-left: 0;
+  border-top: 0;
+}
+.rc-panel--magenta .rc-panel__corners::before,
+.rc-panel--magenta .rc-panel__corners::after {
+  border-color: var(--rc-magenta);
+}
+
+/* ---------- tipografia de titulo con glow ---------- */
+.rc-title {
+  font-family: var(--rc-font-display);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--rc-ink);
+  text-shadow:
+    0 0 6px rgba(0, 229, 255, 0.9),
+    0 0 22px rgba(0, 229, 255, 0.5),
+    0 0 44px rgba(255, 46, 161, 0.35);
+}
+.rc-eyebrow {
+  font-family: var(--rc-font-display);
+  font-size: 0.68rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--rc-cyan);
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.6);
+}
+
+/* ---------- botones ---------- */
+.rc-btn {
+  position: relative;
+  font-family: var(--rc-font-display);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  border-radius: 10px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  cursor: pointer;
+}
+.rc-btn:active:not(:disabled) {
+  transform: translateY(2px) scale(0.98);
+}
+.rc-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+  filter: grayscale(0.4);
+}
+.rc-btn-primary {
+  background: linear-gradient(180deg, #2be6ff 0%, #ff2ea1 100%);
+  color: #0a0714;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 6px 0 0 #7a0f52, 0 10px 24px -8px rgba(255, 46, 161, 0.55);
+}
+.rc-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+.rc-btn-primary:active:not(:disabled) {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 2px 0 0 #7a0f52;
+}
+.rc-btn-gold {
+  background: linear-gradient(180deg, #fff3b0 0%, #ffb020 100%);
+  color: #2b1c04;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 6px 0 0 #92600a, 0 10px 24px -8px rgba(255, 176, 32, 0.5);
+}
+.rc-btn-gold:hover:not(:disabled) {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+.rc-btn-ghost {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--rc-cyan);
+  border: 1px solid var(--rc-line);
+}
+.rc-btn-ghost:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.08);
+  border-color: var(--rc-cyan);
+}
+.rc-btn-ghost--magenta {
+  color: var(--rc-magenta);
+  border-color: var(--rc-line-magenta);
+}
+.rc-btn-ghost--magenta:hover:not(:disabled) {
+  background: rgba(255, 46, 161, 0.08);
+  border-color: var(--rc-magenta);
+}
+.rc-btn-flat {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--rc-ink-dim);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.rc-btn-flat:hover:not(:disabled) {
+  color: var(--rc-ink);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ---------- chips / stat boxes ---------- */
+.rc-stat {
+  position: relative;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.04), transparent);
+  padding: 0.5rem 0.6rem;
+  text-align: center;
+}
+.rc-stat__label {
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rc-ink-dim);
+}
+.rc-stat__value {
+  font-family: var(--rc-font-display);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- barra de progreso neon ---------- */
+.rc-bar {
+  height: 0.7rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.rc-bar__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--rc-cyan), var(--rc-magenta));
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.6);
+  transition: width 0.5s ease;
+}
+
+/* ---------- bandejas hundidas (mazo, mano, descarte) ---------- */
+.rc-well {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(4, 3, 10, 0.55);
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(0, 229, 255, 0.06);
+  border-radius: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rc-arena__floor { display: none; }
+}

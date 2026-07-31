@@ -836,7 +836,7 @@ function RelicChip({ relic }: { relic: Relic }) {
   return (
     <Tooltip text={relic.desc}>
       <div
-        className={`flex items-center gap-1 rounded-lg border bg-slate-900/80 px-2 py-1 ring-1 ${RARITY_RING[relic.rarity]} ${RARITY_GLOW[relic.rarity]}`}
+        className={`flex items-center gap-1 rounded-lg border bg-[#12101c]/90 px-2 py-1 ring-1 ${RARITY_RING[relic.rarity]} ${RARITY_GLOW[relic.rarity]}`}
       >
         <span className="text-base">{relic.icon}</span>
         <span className={`text-xs font-semibold ${RARITY_TEXT[relic.rarity]}`}>
@@ -857,11 +857,9 @@ function StatBox({
   accent?: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-center">
-      <div className="text-[10px] uppercase tracking-wider text-slate-400">
-        {label}
-      </div>
-      <div className={`text-lg font-black ${accent ?? "text-slate-100"}`}>
+    <div className="rc-stat">
+      <div className="rc-stat__label">{label}</div>
+      <div className={`rc-stat__value text-lg ${accent ?? "text-slate-100"}`}>
         {value}
       </div>
     </div>
@@ -880,27 +878,18 @@ function MenuScreen({
   const [showHelp, setShowHelp] = useState(false);
 
   return (
-    <div className="flex min-h-[80vh] flex-col items-center justify-center gap-6 px-4 text-center">
-      <div className="space-y-2">
-        <h1
-          className="text-6xl font-black tracking-tight sm:text-7xl"
-          style={{
-            fontFamily: "ui-monospace, monospace",
-            color: "#fbbf24",
-            textShadow:
-              "3px 3px 0 #92400e, 6px 6px 0 #0f172a, 0 0 24px rgba(252,211,77,0.4)",
-          }}
-        >
-          ROYALE CLIMB
-        </h1>
+    <div className="flex min-h-[80vh] flex-col items-center justify-center gap-7 px-4 text-center">
+      <div className="space-y-3">
+        <p className="rc-eyebrow">Roguelike de cartas</p>
+        <h1 className="rc-title text-6xl sm:text-7xl">ROYALE CLIMB</h1>
         <p className="text-sm text-slate-400">
-          Roguelike de cartas · construye combos · escala el ante
+          Construye combos · escala el ante · sin límite
         </p>
-        <div className="mx-auto flex w-fit gap-2 pt-2">
+        <div className="mx-auto flex w-fit gap-2 pt-3">
           {SUITS.map((s, i) => (
             <div
               key={s}
-              className="border-[3px] border-slate-950 bg-gradient-to-br from-slate-200 to-slate-400 p-1.5 shadow-[0_3px_0_0_#1e293b]"
+              className="rc-panel rc-panel__corners p-1.5"
               style={{
                 animation: `rcsway ${2.6 + i * 0.3}s ease-in-out infinite`,
               }}
@@ -914,19 +903,19 @@ function MenuScreen({
       <div className="flex w-full max-w-sm flex-col gap-3">
         <button
           onClick={() => onStart((Math.random() * 1e9) | 0, false)}
-          className="rounded-xl bg-gradient-to-r from-amber-400 to-rose-500 px-6 py-4 text-lg font-black text-slate-950 transition-transform hover:scale-[1.03] active:scale-95"
+          className="rc-btn rc-btn-primary px-6 py-4 text-lg"
         >
           ▶  Nueva partida
         </button>
         <button
           onClick={() => setShowHelp(true)}
-          className="rounded-xl border border-sky-500/60 bg-sky-500/10 px-6 py-3 font-bold text-sky-200 transition-transform hover:scale-[1.03] active:scale-95"
+          className="rc-btn rc-btn-ghost px-6 py-3"
         >
           ?  Cómo se juega
         </button>
         <button
           onClick={() => onStart((Math.random() * 1e9) | 0, true)}
-          className="rounded-xl border border-fuchsia-500/60 bg-fuchsia-500/10 px-6 py-3 font-bold text-fuchsia-200 transition-transform hover:scale-[1.03] active:scale-95"
+          className="rc-btn rc-btn-ghost--magenta px-6 py-3"
         >
           ∞  Modo Endless
         </button>
@@ -938,7 +927,7 @@ function MenuScreen({
               setSeedInput(e.target.value.replace(/[^0-9]/g, ""))
             }
             placeholder="Semilla (opcional)"
-            className="min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-amber-400 focus:outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400/60 focus:outline-none"
           />
           <button
             onClick={() =>
@@ -947,7 +936,7 @@ function MenuScreen({
                 false
               )
             }
-            className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-bold text-slate-200 hover:border-slate-400"
+            className="rc-btn rc-btn-flat px-4 py-2 text-sm"
           >
             Jugar
           </button>
@@ -965,13 +954,13 @@ function MenuScreen({
 /* ---------------- Modal de ayuda ---------------- */
 function HelpModal({ onClose }: { onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/92 p-4">
-      <div className="max-h-[88vh] w-full max-w-xl overflow-auto rounded-2xl border-[3px] border-slate-700 bg-slate-900 p-6 text-left">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,7,20,0.92)] p-4 backdrop-blur-sm">
+      <div className="rc-panel rc-panel__corners max-h-[88vh] w-full max-w-xl overflow-auto p-6 text-left">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-2xl font-black text-amber-300">Cómo se juega</h3>
+          <h3 className="rc-title text-2xl">Cómo se juega</h3>
           <button
             onClick={onClose}
-            className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1 text-sm font-bold text-slate-300 hover:border-slate-400"
+            className="rc-btn rc-btn-flat px-3 py-1 text-sm"
           >
             Cerrar
           </button>
@@ -1050,7 +1039,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
 
         <button
           onClick={onClose}
-          className="mt-5 w-full rounded-xl bg-gradient-to-r from-amber-400 to-rose-500 px-6 py-3 font-black text-slate-950 transition-transform hover:scale-[1.02] active:scale-95"
+          className="rc-btn rc-btn-primary mt-5 w-full py-3"
         >
           ¡Entendido!
         </button>
@@ -1270,9 +1259,9 @@ function PlayScreen({
         />
       </div>
 
-      <div className="mb-3 rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-        <div className="mb-1 flex items-baseline justify-between">
-          <span className="text-xs uppercase tracking-wider text-slate-400">
+      <div className="rc-panel mb-3 p-3">
+        <div className="mb-1.5 flex items-baseline justify-between">
+          <span className="rc-eyebrow" style={{ fontSize: "0.62rem" }}>
             Objetivo de ronda
           </span>
           <span className="font-mono text-sm">
@@ -1291,11 +1280,8 @@ function PlayScreen({
             </span>
           </span>
         </div>
-        <div className="h-3 overflow-hidden rounded-full bg-slate-800">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-amber-400 via-rose-400 to-emerald-400 transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
+        <div className="rc-bar">
+          <div className="rc-bar__fill" style={{ width: `${progress}%` }} />
         </div>
       </div>
 
@@ -1308,7 +1294,7 @@ function PlayScreen({
       )}
 
       <div
-        className={`relative mb-3 flex min-h-[5rem] items-center justify-between overflow-hidden rounded-xl border-[3px] border-slate-900 bg-gradient-to-br from-slate-900 to-slate-950 p-4 shadow-[0_4px_0_0_#1e293b] ${
+        className={`rc-panel rc-panel__corners relative mb-3 flex min-h-[5rem] items-center justify-between overflow-hidden p-4 ${
           shake === "big"
             ? "animate-[rcshakebig_0.48s]"
             : shake === "small"
@@ -1389,7 +1375,7 @@ function PlayScreen({
       </div>
       <div className="mb-3 flex items-stretch gap-2">
         {/* mazo (montón de reversos) */}
-        <div className="hidden shrink-0 flex-col items-center justify-center gap-1 rounded-xl border-[3px] border-slate-900 bg-slate-950/60 px-2 py-3 sm:flex">
+        <div className="rc-well hidden shrink-0 flex-col items-center justify-center gap-1 px-2 py-3 sm:flex">
           <div className="relative" style={{ width: 44, height: 64 }}>
             {gs.drawPile.length > 2 && (
               <div className="absolute left-1.5 top-1.5">
@@ -1417,7 +1403,7 @@ function PlayScreen({
         {/* cartas en mano */}
         <div
           ref={handRef}
-          className="flex min-h-[7.5rem] flex-1 items-center gap-1.5 overflow-x-auto rounded-xl border-[3px] border-slate-900 bg-slate-950/60 px-3 py-5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.6)] sm:justify-center sm:gap-2"
+          className="rc-well flex min-h-[7.5rem] flex-1 items-center gap-1.5 overflow-x-auto px-3 py-5 sm:justify-center sm:gap-2"
         >
           {gs.hand.map((c) => (
             <PlayingCard
@@ -1436,7 +1422,7 @@ function PlayScreen({
         </div>
 
         {/* pila de descarte */}
-        <div className="hidden shrink-0 flex-col items-center justify-center gap-1 rounded-xl border-[3px] border-slate-900 bg-slate-950/60 px-2 py-3 sm:flex">
+        <div className="rc-well hidden shrink-0 flex-col items-center justify-center gap-1 px-2 py-3 sm:flex">
           <div
             className="flex items-center justify-center rounded border-2 border-dashed border-slate-700"
             style={{ width: 40, height: 58 }}
@@ -1453,48 +1439,48 @@ function PlayScreen({
         <button
           onClick={playHand}
           disabled={selected.length === 0 || gs.handsLeft <= 0}
-          className="rounded-xl bg-gradient-to-r from-emerald-400 to-sky-500 px-6 py-3 font-black text-slate-950 transition-transform enabled:hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rc-btn rc-btn-primary px-6 py-3"
         >
           ▶ Jugar mano ({selected.length})
         </button>
         <button
           onClick={discard}
           disabled={selected.length === 0 || gs.discardsLeft <= 0}
-          className="rounded-xl border border-rose-500/60 bg-rose-500/10 px-5 py-3 font-bold text-rose-200 transition-transform enabled:hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rc-btn rc-btn-ghost--magenta px-5 py-3"
         >
           ✕ Descartar ({gs.discardsLeft})
         </button>
         <button
           onClick={() => setSelected([])}
-          className="rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 text-sm font-bold text-slate-300 hover:border-slate-400"
+          className="rc-btn rc-btn-flat px-4 py-3 text-sm"
         >
           Limpiar
         </button>
-        <div className="mx-1 h-8 w-px bg-slate-700" />
+        <div className="mx-1 h-8 w-px bg-white/10" />
         <button
           onClick={() => sortHand("rank")}
-          className="rounded-xl border border-slate-600 bg-slate-800 px-3 py-3 text-sm font-bold text-slate-300 hover:border-slate-400"
+          className="rc-btn rc-btn-flat px-3 py-3 text-sm"
         >
           Ordenar: valor
         </button>
         <button
           onClick={() => sortHand("suit")}
-          className="rounded-xl border border-slate-600 bg-slate-800 px-3 py-3 text-sm font-bold text-slate-300 hover:border-slate-400"
+          className="rc-btn rc-btn-flat px-3 py-3 text-sm"
         >
           Ordenar: palo
         </button>
       </div>
 
       {gs.history.length > 0 && (
-        <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/40 p-3">
-          <div className="mb-1.5 text-xs uppercase tracking-wider text-slate-500">
+        <div className="rc-panel mt-4 p-3">
+          <div className="rc-eyebrow mb-1.5" style={{ fontSize: "0.6rem" }}>
             Historial de jugadas
           </div>
           <div className="flex flex-wrap gap-1.5">
             {gs.history.slice(0, 12).map((h, i) => (
               <span
                 key={i}
-                className="rounded-md bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300"
+                className="rounded-md border border-white/5 bg-white/[0.03] px-2 py-0.5 text-[11px] text-slate-300"
               >
                 R{h.round} · {h.hand}{" "}
                 <span className="font-mono text-amber-300">
@@ -1530,19 +1516,17 @@ function RewardScreen({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 text-center">
-      <h2 className="mb-1 text-3xl font-black text-emerald-300">
-        ¡Ronda {gs.round} superada!
-      </h2>
+      <p className="rc-eyebrow mb-2">Ronda {gs.round} superada</p>
+      <h2 className="rc-title mb-1 text-3xl">ELIGE TU MODIFICADOR</h2>
       <p className="mb-6 text-sm text-slate-400">
-        Elige un modificador para tu partida. Cada elección define tu
-        estrategia.
+        Cada elección define tu estrategia para el resto de la partida.
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
         {offers.map((r) => (
           <button
             key={r.id}
             onClick={() => onChoose(r)}
-            className={`group flex flex-col items-center gap-2 rounded-2xl border bg-gradient-to-br from-slate-900 to-slate-950 p-5 ring-1 transition-transform hover:scale-[1.04] active:scale-95 ${RARITY_RING[r.rarity]} ${RARITY_GLOW[r.rarity]}`}
+            className={`rc-panel rc-panel__corners group flex flex-col items-center gap-2 p-5 ring-1 transition-transform hover:scale-[1.04] active:scale-95 ${RARITY_RING[r.rarity]} ${RARITY_GLOW[r.rarity]}`}
           >
             <span className="text-4xl transition-transform group-hover:scale-110">
               {r.icon}
@@ -1564,7 +1548,7 @@ function RewardScreen({
       </div>
       <button
         onClick={onSkip}
-        className="mt-6 rounded-lg border border-slate-600 bg-slate-800 px-5 py-2 text-sm font-bold text-slate-300 hover:border-slate-400"
+        className="rc-btn rc-btn-flat mt-6 px-5 py-2 text-sm"
       >
         Saltar (+4$)
       </button>
@@ -1620,24 +1604,25 @@ function ShopScreen({
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      <div className="mb-6 flex items-baseline justify-between">
-        <h2 className="text-3xl font-black text-amber-300">Tienda</h2>
-        <span className="rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-3 py-1 font-mono text-lg font-black text-emerald-300">
+      <div className="mb-7 flex items-baseline justify-between">
+        <div>
+          <p className="rc-eyebrow mb-1">Ronda {gs.round} · parada</p>
+          <h2 className="rc-title text-3xl sm:text-4xl">TIENDA</h2>
+        </div>
+        <span className="rc-btn rc-btn-gold rc-panel__corners px-4 py-2 text-lg">
           ${gs.money}
         </span>
       </div>
 
-      <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-slate-400">
-        Modificadores
-      </h3>
-      <div className="mb-6 grid gap-3 sm:grid-cols-2">
+      <h3 className="rc-eyebrow mb-2">Modificadores</h3>
+      <div className="mb-8 grid gap-3 sm:grid-cols-2">
         {stock.relics.map(({ relic, price }) => {
           const bought = boughtRelics.includes(relic.id);
           const afford = gs.money >= price;
           return (
             <div
               key={relic.id}
-              className={`flex items-center gap-3 rounded-2xl border bg-gradient-to-br from-slate-900 to-slate-950 p-4 ring-1 ${RARITY_RING[relic.rarity]} ${RARITY_GLOW[relic.rarity]} ${
+              className={`rc-panel rc-panel__corners flex items-center gap-3 p-4 ring-1 ${RARITY_RING[relic.rarity]} ${RARITY_GLOW[relic.rarity]} ${
                 bought ? "opacity-40" : ""
               }`}
             >
@@ -1656,7 +1641,7 @@ function ShopScreen({
                   onBuyRelic(relic, price);
                   setBoughtRelics((b) => [...b, relic.id]);
                 }}
-                className="shrink-0 rounded-lg bg-emerald-500 px-3 py-2 text-sm font-black text-slate-950 transition-transform enabled:hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500"
+                className="rc-btn rc-btn-primary shrink-0 px-3 py-2 text-sm"
               >
                 {bought ? "✓" : `${price}`}
               </button>
@@ -1670,17 +1655,15 @@ function ShopScreen({
         )}
       </div>
 
-      <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-slate-400">
-        Mejoras de carta
-      </h3>
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+      <h3 className="rc-eyebrow mb-2">Mejoras de carta</h3>
+      <div className="mb-8 grid gap-3 sm:grid-cols-3">
         {stock.specials.map((sp, i) => {
           const used = usedSpecials.includes(i);
           const afford = gs.money >= sp.price;
           return (
             <div
               key={i}
-              className={`flex flex-col gap-2 rounded-2xl border border-slate-700 bg-gradient-to-br from-slate-900 to-slate-950 p-4 ${
+              className={`rc-panel rc-panel--magenta rc-panel__corners flex flex-col gap-2 p-4 ${
                 used ? "opacity-40" : ""
               }`}
             >
@@ -1696,7 +1679,7 @@ function ShopScreen({
               <button
                 disabled={used || !afford}
                 onClick={() => setPendingSpecial(sp)}
-                className="rounded-lg bg-sky-500 px-3 py-2 text-sm font-black text-slate-950 transition-transform enabled:hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500"
+                className="rc-btn rc-btn-ghost--magenta px-3 py-2 text-sm"
               >
                 {used ? "Usado" : `$${sp.price}`}
               </button>
@@ -1705,17 +1688,17 @@ function ShopScreen({
         })}
       </div>
 
-      <div className="mb-6">
+      <div className="mb-8">
         <button
           onClick={() => setShowSell((s) => !s)}
-          className="mb-2 rounded-lg border border-rose-500/50 bg-rose-500/10 px-4 py-2 text-sm font-bold text-rose-200 hover:border-rose-400"
+          className="rc-btn rc-btn-ghost--magenta mb-2 px-4 py-2 text-sm"
         >
           {showSell
             ? "▲ Ocultar baraja"
             : "▼ Vender cartas (+2$ c/u)"}
         </button>
         {showSell && (
-          <div className="flex flex-wrap gap-2 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+          <div className="rc-panel flex flex-wrap gap-2 p-3">
             {gs.deck.length <= 20 ? (
               <p className="text-xs text-rose-300">
                 No puedes bajar de 20 cartas en la baraja.
@@ -1746,21 +1729,21 @@ function ShopScreen({
 
       <button
         onClick={onContinue}
-        className="w-full rounded-xl bg-gradient-to-r from-amber-400 to-rose-500 px-6 py-4 text-lg font-black text-slate-950 transition-transform hover:scale-[1.02] active:scale-95"
+        className="rc-btn rc-btn-primary w-full py-4 text-lg"
       >
         Continuar a la siguiente ronda →
       </button>
 
       {pendingSpecial && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4">
-          <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl border border-slate-700 bg-slate-900 p-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,7,20,0.92)] p-4 backdrop-blur-sm">
+          <div className="rc-panel rc-panel__corners max-h-[85vh] w-full max-w-2xl overflow-auto p-5">
             <div className="mb-3 flex items-center justify-between">
-              <h4 className="text-lg font-black text-slate-100">
+              <h4 className="rc-title text-lg">
                 {pendingSpecial.icon} {pendingSpecial.name}
               </h4>
               <button
                 onClick={() => setPendingSpecial(null)}
-                className="rounded-lg border border-slate-600 px-3 py-1 text-sm text-slate-300"
+                className="rc-btn rc-btn-flat px-3 py-1 text-sm"
               >
                 Cancelar
               </button>
@@ -1774,10 +1757,10 @@ function ShopScreen({
                   <button
                     key={s}
                     onClick={() => setConvSuit(s)}
-                    className={`rounded-lg border px-3 py-2 text-lg ${
+                    className={`rc-btn px-3 py-2 text-lg ${
                       convSuit === s
-                        ? "border-amber-300 bg-slate-800"
-                        : "border-slate-600 bg-slate-900"
+                        ? "rc-btn-ghost--magenta"
+                        : "rc-btn-flat"
                     } ${SUIT_COLOR[s]}`}
                   >
                     {SUIT_GLYPH[s]}
@@ -1832,7 +1815,15 @@ function DefeatScreen({
 }) {
   return (
     <div className="mx-auto flex min-h-[75vh] max-w-lg flex-col items-center justify-center gap-5 px-4 text-center">
-      <h2 className="text-5xl font-black text-rose-400">Derrota</h2>
+      <h2
+        className="rc-title text-5xl"
+        style={{
+          textShadow:
+            "0 0 6px rgba(255,46,161,0.9), 0 0 22px rgba(255,46,161,0.5)",
+        }}
+      >
+        DERROTA
+      </h2>
       <p className="text-slate-400">
         Caíste en la ronda {gs.round}. Te faltaron{" "}
         <span className="text-rose-300">
@@ -1864,13 +1855,13 @@ function DefeatScreen({
       <div className="flex gap-3">
         <button
           onClick={onRetry}
-          className="rounded-xl bg-gradient-to-r from-amber-400 to-rose-500 px-6 py-3 font-black text-slate-950 transition-transform hover:scale-105 active:scale-95"
+          className="rc-btn rc-btn-primary px-6 py-3"
         >
           ↻ Misma semilla
         </button>
         <button
           onClick={onMenu}
-          className="rounded-xl border border-slate-600 bg-slate-800 px-6 py-3 font-bold text-slate-200 hover:border-slate-400"
+          className="rc-btn rc-btn-flat px-6 py-3"
         >
           Menú principal
         </button>
@@ -1892,9 +1883,7 @@ function WinScreen({
   return (
     <div className="mx-auto flex min-h-[75vh] max-w-lg flex-col items-center justify-center gap-5 px-4 text-center">
       <div className="animate-[rcpulse_2s_infinite] text-6xl">🏆</div>
-      <h2 className="bg-gradient-to-r from-amber-300 to-emerald-300 bg-clip-text text-4xl font-black text-transparent">
-        ¡Ante {gs.ante} completado!
-      </h2>
+      <h2 className="rc-title text-4xl">¡ANTE {gs.ante} COMPLETADO!</h2>
       <p className="text-slate-400">
         Has superado {gs.round} rondas.{" "}
         {gs.endless
@@ -1922,13 +1911,13 @@ function WinScreen({
       <div className="flex gap-3">
         <button
           onClick={onContinueEndless}
-          className="rounded-xl bg-gradient-to-r from-fuchsia-400 to-sky-500 px-6 py-3 font-black text-slate-950 transition-transform hover:scale-105 active:scale-95"
+          className="rc-btn rc-btn-primary px-6 py-3"
         >
           ∞ Seguir escalando
         </button>
         <button
           onClick={onMenu}
-          className="rounded-xl border border-slate-600 bg-slate-800 px-6 py-3 font-bold text-slate-200 hover:border-slate-400"
+          className="rc-btn rc-btn-flat px-6 py-3"
         >
           Menú principal
         </button>
@@ -2096,7 +2085,7 @@ export default function App() {
   };
 
   return (
-    <div className="relative min-h-screen w-full bg-slate-950 bg-[radial-gradient(ellipse_at_top,#1e293b_0%,#020617_60%)] text-slate-100 antialiased">
+    <div className="rc-arena relative min-h-screen w-full text-slate-100 antialiased">
       <style>{`
         @keyframes rcfloat {
           0% { opacity: 0; transform: translateY(0) scale(0.8); }
@@ -2145,18 +2134,11 @@ export default function App() {
           70% { opacity: 1; transform: translate(-50%,-50%) scale(1) rotate(-2deg); }
           100% { opacity: 0; transform: translate(-50%,-50%) scale(1.1) rotate(0deg); }
         }
-        @keyframes rcbgdrift {
-          0% { transform: translate(0,0); }
-          100% { transform: translate(-22px,-22px); }
-        }
-        .rc-pixelbg {
-          background-image: radial-gradient(circle, rgba(148,163,184,0.06) 1px, transparent 1px);
-          background-size: 22px 22px;
-          animation: rcbgdrift 14s linear infinite;
-        }
       `}</style>
 
-      <div className="rc-pixelbg pointer-events-none absolute inset-0 opacity-50" />
+      <div className="rc-arena__glow" />
+      <div className="rc-arena__floor" />
+      <div className="rc-arena__scanlines" />
       <ParticleLayer particles={particles} />
 
       <div className="relative z-10 mx-auto w-full max-w-5xl py-4 sm:py-6">
@@ -2164,12 +2146,13 @@ export default function App() {
           <div className="mb-2 flex items-center justify-between px-3">
             <button
               onClick={() => setScreen("menu")}
-              className="text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-300"
+              className="rc-eyebrow transition-colors hover:text-white"
+              style={{ fontSize: "0.62rem" }}
             >
-              ‹ Royale Climb
+              ‹ ROYALE CLIMB
             </button>
             {gs && (
-              <span className="text-[11px] text-slate-600">
+              <span className="font-mono text-[11px] text-slate-600">
                 semilla {gs.seed} {gs.endless ? "· ∞" : ""}
               </span>
             )}
