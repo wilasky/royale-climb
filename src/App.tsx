@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useRef } from "react";
-import { RelicBadge } from "./relicIcons";
+import { RelicBadge, RelicCardArt } from "./relicIcons";
+import { PixelSuitGlow, SUIT_RING } from "./pixelSuits";
 
 /* ============================================================
    ROYALE CLIMB — Roguelike de cartas con combos de póker
@@ -7,7 +8,7 @@ import { RelicBadge } from "./relicIcons";
    ============================================================ */
 
 /* ---------------- Tipos ---------------- */
-type Suit = "spades" | "hearts" | "diamonds" | "clubs";
+export type Suit = "spades" | "hearts" | "diamonds" | "clubs";
 type Rarity = "common" | "rare" | "epic" | "legendary";
 type Screen = "menu" | "play" | "reward" | "shop" | "defeat" | "win";
 
@@ -216,63 +217,40 @@ function PixelSuit({ suit, px }: { suit: Suit; px: number }) {
   );
 }
 
-/* ---------------- Sprite de figura (J/Q/K) ----------------
-   Un retrato base 16x20 que se tinta con la paleta del palo.
-   La corona cambia ligeramente por rango via overlay. */
-const FACE_16x20: PixGrid = [
-  [0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0],
-  [0,0,0,0,0,1,4,4,4,4,1,0,0,0,0,0],
-  [0,0,0,0,1,4,1,4,4,1,4,1,0,0,0,0],
-  [0,0,0,1,4,4,4,4,4,4,4,4,1,0,0,0],
-  [0,0,1,4,4,4,4,4,4,4,4,4,4,1,0,0],
-  [0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
-  [0,0,0,1,2,2,2,2,2,2,2,2,1,0,0,0],
-  [0,0,0,1,2,3,3,3,3,3,3,2,1,0,0,0],
-  [0,0,0,1,3,4,3,3,3,3,4,3,1,0,0,0],
-  [0,0,0,1,3,1,3,3,3,3,1,3,1,0,0,0],
-  [0,0,0,1,3,3,3,1,1,3,3,3,1,0,0,0],
-  [0,0,0,1,3,3,3,3,3,3,3,3,1,0,0,0],
-  [0,0,0,1,2,3,1,1,1,1,3,2,1,0,0,0],
-  [0,0,0,0,1,2,3,3,3,3,2,1,0,0,0,0],
-  [0,0,0,0,1,2,2,2,2,2,2,1,0,0,0,0],
-  [0,0,1,1,4,4,2,2,2,2,4,4,1,1,0,0],
-  [0,1,4,4,4,4,4,2,2,4,4,4,4,4,1,0],
-  [1,4,4,4,4,4,4,4,4,4,4,4,4,4,4,1],
-  [1,4,4,4,1,4,4,4,4,4,4,1,4,4,4,1],
-  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-];
-
-/* paleta de figura: contorno oscuro, ropa(sombra), piel(base), oro(brillo) */
-function facePalette(suit: Suit): [string, string, string, string] {
-  const isRed = suit === "hearts" || suit === "diamonds";
-  return [
-    "#1a1206",
-    isRed ? "#9f1239" : "#1e3a5f", // ropa
-    "#f0c89a", // piel
-    "#fbbf24", // oro corona/detalle
-  ];
-}
-
 /* ---------------- Reverso de carta ---------------- */
 function CardBack({ w, h }: { w: number; h: number }) {
   return (
-    <div
-      className="relative overflow-hidden border-[3px] border-slate-950"
-      style={{ width: w, height: h }}
-    >
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-950" />
-      <div
-        className="absolute inset-0 opacity-40"
-        style={{
-          backgroundImage:
-            "repeating-linear-gradient(45deg, #fbbf2433 0 4px, transparent 4px 8px), repeating-linear-gradient(-45deg, #818cf833 0 4px, transparent 4px 8px)",
-        }}
-      />
-      <div className="absolute inset-1.5 border-2 border-amber-400/40" />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="text-amber-300/70" style={{ fontSize: w * 0.4 }}>
-          ♛
-        </div>
+    <div className="rc-card relative" style={{ width: w, height: h }}>
+      <div className="rc-card__frame" />
+      <div className="absolute inset-0 z-[1] flex items-center justify-center">
+        <svg
+          width={w * 0.46}
+          viewBox="0 0 100 100"
+          style={{ filter: "drop-shadow(0 0 6px rgba(232,249,255,.55))" }}
+        >
+          <defs>
+            <linearGradient id="rc-back-grad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#00e5ff" />
+              <stop offset="1" stopColor="#ff2ea1" />
+            </linearGradient>
+          </defs>
+          <polygon
+            points="50,4 94,50 50,96 6,50"
+            fill="none"
+            stroke="url(#rc-back-grad)"
+            strokeWidth={3}
+          />
+          <text
+            x="50"
+            y="59"
+            textAnchor="middle"
+            fontFamily="'Press Start 2P', monospace"
+            fontSize="20"
+            fill="#eafcff"
+          >
+            RC
+          </text>
+        </svg>
       </div>
     </div>
   );
@@ -667,160 +645,105 @@ function PlayingCard({
   small?: boolean;
   scoring?: boolean;
 }) {
-  const w = small ? 56 : 76;
-  const h = small ? 80 : 108;
+  const w = small ? 58 : 80;
+  const h = small ? 82 : 112;
   const isFace = card.rank >= 11 && card.rank <= 13;
-  const isAce = card.rank === 14;
-  const suitPal = SUIT_PALETTE[card.suit];
-  const cornerHex =
-    card.suit === "hearts"
-      ? "#e11d48"
-      : card.suit === "diamonds"
-      ? "#d97706"
-      : "#1e293b";
+  const isRed = card.suit === "hearts" || card.suit === "diamonds";
+  const ring = SUIT_RING[card.suit];
 
-  const bodyBg = card.glass
-    ? "linear-gradient(135deg, #cffafe 0%, #a5f3fc 45%, #e0f2fe 100%)"
+  const materialTint = card.glass
+    ? "rgba(0,229,255,0.1)"
     : card.steel
-    ? "linear-gradient(135deg, #e2e8f0 0%, #94a3b8 50%, #cbd5e1 100%)"
+    ? "rgba(226,232,240,0.12)"
     : card.gold
-    ? "linear-gradient(135deg, #fef3c7 0%, #fcd34d 50%, #fffbeb 100%)"
-    : "linear-gradient(160deg, #fafafa 0%, #f1f5f9 60%, #e2e8f0 100%)";
+    ? "rgba(255,233,77,0.14)"
+    : "transparent";
 
-  const cornerPx = small ? 1 : 1.4;
-  const centerPx = small ? 2 : 3;
+  const cornerPx = small ? 1.1 : 1.5;
+  const bigPx = small ? 2.2 : 3.1;
 
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      style={{
-        width: w,
-        height: h,
-        background: bodyBg,
-        border: `3px solid ${selected ? "#fcd34d" : "#0b0f1a"}`,
-        boxShadow: selected
-          ? "0 0 0 2px #0b0f1a, 0 7px 0 0 #92400e, 0 0 20px -2px rgba(252,211,77,0.85)"
-          : "0 4px 0 0 #1e293b, 0 5px 6px -2px rgba(0,0,0,0.5)",
-      }}
+      style={{ width: w, height: h }}
       className={[
-        "relative shrink-0 overflow-hidden transition-all duration-150",
+        "rc-card relative shrink-0 transition-all duration-150",
+        isRed ? "rc-red" : "",
         selected ? "-translate-y-4 z-20" : "hover:-translate-y-2 hover:z-10 z-0",
         scoring ? "animate-[rcscorepop_0.5s_ease-out] z-30" : "",
         disabled ? "opacity-60 cursor-default" : "cursor-pointer",
       ].join(" ")}
     >
-      {/* marca de seleccionada */}
+      {materialTint !== "transparent" && (
+        <div
+          className="absolute inset-0 z-[1]"
+          style={{ background: materialTint }}
+        />
+      )}
+      <div
+        className="rc-card__frame"
+        style={selected ? { borderColor: "#ffe94d", boxShadow: "0 0 10px #ffe94d" } : undefined}
+      />
       {selected && (
-        <div className="absolute -top-3 left-1/2 z-40 -translate-x-1/2 whitespace-nowrap rounded-sm border-2 border-slate-950 bg-amber-300 px-1.5 text-[9px] font-black uppercase tracking-wide text-slate-950">
+        <div className="absolute -top-2.5 left-1/2 z-40 -translate-x-1/2 whitespace-nowrap rounded-sm border border-black/40 bg-amber-300 px-1.5 text-[8px] font-black uppercase tracking-wide text-slate-950">
           elegida
         </div>
       )}
 
-      {/* textura sutil */}
-      <div
-        className="absolute inset-0 opacity-[0.12]"
-        style={{
-          backgroundImage:
-            "repeating-linear-gradient(0deg, #00000022 0 1px, transparent 1px 3px)",
-        }}
-      />
-      {/* marco interior decorativo */}
-      <div
-        className="absolute inset-1 border"
-        style={{ borderColor: cornerHex + "55" }}
-      />
-
       {/* esquina superior izquierda */}
-      <div className="absolute top-0.5 left-1 z-10 flex flex-col items-center leading-none">
+      <div className="absolute top-1 left-1 z-10 flex flex-col items-center gap-0.5 leading-none">
         <span
-          className={`font-black ${small ? "text-[11px]" : "text-sm"}`}
-          style={{ fontFamily: "ui-monospace, monospace", color: cornerHex }}
+          className={`rc-num ${isRed ? "text-rose-300" : "text-cyan-200"} ${small ? "text-[7px]" : "text-[8px]"}`}
+          style={{ textShadow: `0 0 4px ${ring}` }}
         >
           {rankLabel(card.rank)}
         </span>
-        <div className="mt-0.5">
-          <PixSprite
-            grid={SUIT_SPRITE[card.suit]}
-            px={cornerPx}
-            palette={suitPal}
-          />
-        </div>
+        <PixelSuitGlow suit={card.suit} px={cornerPx} glow={false} />
       </div>
 
       {/* esquina inferior derecha (rotada) */}
-      <div className="absolute bottom-0.5 right-1 z-10 flex rotate-180 flex-col items-center leading-none">
+      <div className="absolute bottom-1 right-1 z-10 flex rotate-180 flex-col items-center gap-0.5 leading-none">
         <span
-          className={`font-black ${small ? "text-[11px]" : "text-sm"}`}
-          style={{ fontFamily: "ui-monospace, monospace", color: cornerHex }}
+          className={`rc-num ${isRed ? "text-rose-300" : "text-cyan-200"} ${small ? "text-[7px]" : "text-[8px]"}`}
+          style={{ textShadow: `0 0 4px ${ring}` }}
         >
           {rankLabel(card.rank)}
         </span>
-        <div className="mt-0.5">
-          <PixSprite
-            grid={SUIT_SPRITE[card.suit]}
-            px={cornerPx}
-            palette={suitPal}
-          />
-        </div>
+        <PixelSuitGlow suit={card.suit} px={cornerPx} glow={false} />
       </div>
 
       {/* contenido central */}
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className="absolute inset-0 z-[1] flex items-center justify-center">
         <div className={scoring ? "animate-[rcspin_0.5s_ease-out]" : ""}>
           {isFace ? (
-            <div className="relative flex items-center justify-center">
-              <div
-                className="absolute -inset-1 rounded-sm border"
-                style={{ borderColor: cornerHex + "66" }}
-              />
-              <PixSprite
-                grid={FACE_16x20}
-                px={small ? 1.7 : 2.3}
-                palette={facePalette(card.suit)}
-              />
-            </div>
-          ) : isAce ? (
-            <div className="relative flex items-center justify-center">
-              <div
-                className="absolute h-[2px] w-10 rotate-45"
-                style={{ background: cornerHex + "44" }}
-              />
-              <div
-                className="absolute h-[2px] w-10 -rotate-45"
-                style={{ background: cornerHex + "44" }}
-              />
-              <PixSprite
-                grid={SUIT_SPRITE[card.suit]}
-                px={small ? 2.6 : 3.6}
-                palette={suitPal}
-              />
+            <div className="flex flex-col items-center gap-1">
+              <span
+                className={`rc-num ${isRed ? "text-rose-200" : "text-cyan-100"} ${small ? "text-base" : "text-xl"}`}
+                style={{ textShadow: `0 0 8px ${ring}, 0 0 16px ${ring}` }}
+              >
+                {rankLabel(card.rank)}
+              </span>
+              <PixelSuitGlow suit={card.suit} px={small ? 1.6 : 2.1} />
             </div>
           ) : (
-            <PixSprite
-              grid={SUIT_SPRITE[card.suit]}
-              px={centerPx}
-              palette={suitPal}
-            />
+            <PixelSuitGlow suit={card.suit} px={bigPx} />
           )}
         </div>
       </div>
 
       {/* badge de material especial */}
       {(card.glass || card.steel || card.gold) && (
-        <div className="absolute bottom-0.5 left-1 z-10 text-[9px] font-black uppercase tracking-tight">
-          {card.glass && <span className="text-cyan-700">vidrio</span>}
-          {card.steel && <span className="text-slate-700">acero</span>}
-          {card.gold && <span className="text-amber-700">oro</span>}
+        <div className="absolute bottom-1 left-1.5 z-10 text-[7px] font-black uppercase tracking-tight">
+          {card.glass && <span className="text-cyan-300">vidrio</span>}
+          {card.steel && <span className="text-slate-200">acero</span>}
+          {card.gold && <span className="text-amber-300">oro</span>}
         </div>
       )}
 
-      {/* brillo diagonal */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-white/40 to-transparent opacity-50" />
-
       {/* etiqueta de bonus de fichas */}
       {card.bonusChips > 0 && (
-        <div className="absolute -top-2 -right-2 z-30 border-2 border-slate-950 bg-sky-500 px-1 text-[10px] font-black leading-tight text-slate-950 shadow-[2px_2px_0_0_#000]">
+        <div className="rc-num absolute -top-2 -right-2 z-30 rounded-sm border border-black/50 bg-sky-400 px-1 text-[8px] leading-tight text-slate-950 shadow-[0_0_8px_rgba(56,189,248,0.8)]">
           +{card.bonusChips}
         </div>
       )}
@@ -1241,7 +1164,19 @@ function PlayScreen({
   const progress = Math.min(100, (gs.scoreThisRound / gs.target) * 100);
 
   return (
-    <div className="mx-auto max-w-4xl px-3 pb-6">
+    <div className="mx-auto flex max-w-5xl gap-4 px-3 pb-6">
+      {gs.relics.length > 0 && (
+        <aside className="hidden w-[4.5rem] shrink-0 flex-col items-center gap-2 pt-1 sm:flex">
+          {gs.relics.map((r) => (
+            <Tooltip key={r.id} text={r.desc}>
+              <div>
+                <RelicCardArt id={r.id} rarity={r.rarity} size={52} />
+              </div>
+            </Tooltip>
+          ))}
+        </aside>
+      )}
+      <div className="min-w-0 flex-1">
       <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
         <StatBox label="Ronda" value={`${gs.round}`} accent="text-amber-300" />
         <StatBox label="Ante" value={`${gs.ante}`} accent="text-fuchsia-300" />
@@ -1271,7 +1206,7 @@ function PlayScreen({
           <span className="rc-eyebrow" style={{ fontSize: "0.62rem" }}>
             Objetivo de ronda
           </span>
-          <span className="font-mono text-sm">
+          <span className="rc-num text-xs">
             <span
               className={
                 gs.scoreThisRound >= gs.target
@@ -1293,7 +1228,7 @@ function PlayScreen({
       </div>
 
       {gs.relics.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-1.5">
+        <div className="mb-3 flex flex-wrap gap-1.5 sm:hidden">
           {gs.relics.map((r) => (
             <RelicChip key={r.id} relic={r} />
           ))}
@@ -1332,7 +1267,7 @@ function PlayScreen({
               <div className="text-xs uppercase tracking-wider text-slate-500">
                 Última jugada
               </div>
-              <div className="text-3xl font-black text-amber-300">
+              <div className="rc-num text-xl text-amber-300">
                 +{lastScore.total.toLocaleString()}
               </div>
               <div className="font-mono text-[11px] text-slate-400">
@@ -1341,14 +1276,14 @@ function PlayScreen({
             </>
           )}
           {floatScore !== null && (
-            <div className="pointer-events-none absolute -top-6 right-0 animate-[rcfloat_1.1s_ease-out] text-2xl font-black text-emerald-300">
+            <div className="rc-num pointer-events-none absolute -top-6 right-0 animate-[rcfloat_1.1s_ease-out] text-base text-emerald-300">
               +{floatScore.toLocaleString()}
             </div>
           )}
         </div>
         {bigScore !== null && (
           <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 animate-[rcbigscore_1.3s_ease-out] text-center">
-            <div className="text-5xl font-black text-amber-300 drop-shadow-[0_0_12px_rgba(252,211,77,0.9)] sm:text-6xl">
+            <div className="rc-num text-3xl text-amber-300 drop-shadow-[0_0_12px_rgba(252,211,77,0.9)] sm:text-4xl">
               +{bigScore.toLocaleString()}
             </div>
             <div className="text-sm font-black uppercase tracking-widest text-fuchsia-300">
@@ -1498,6 +1433,7 @@ function PlayScreen({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -1543,7 +1479,7 @@ function RewardScreen({
               }}
             />
             <div className="relative transition-transform group-hover:scale-110">
-              <RelicBadge id={r.id} size={56} ringClass={RARITY_ACCENT[r.rarity]} />
+              <RelicCardArt id={r.id} rarity={r.rarity} size={64} />
             </div>
             <span
               className={`relative text-xs font-black uppercase tracking-wider ${RARITY_TEXT[r.rarity]}`}
@@ -1623,7 +1559,7 @@ function ShopScreen({
           <p className="rc-eyebrow mb-1">Ronda {gs.round} · parada</p>
           <h2 className="rc-title text-3xl sm:text-4xl">TIENDA</h2>
         </div>
-        <span className="rc-btn rc-btn-gold rc-panel__corners px-4 py-2 text-lg">
+        <span className="rc-btn rc-btn-gold rc-panel__corners rc-num px-4 py-2 text-sm">
           ${gs.money}
         </span>
       </div>
@@ -1647,7 +1583,7 @@ function ShopScreen({
                     "radial-gradient(circle at 0% 0%, currentColor, transparent 60%)",
                 }}
               />
-              <RelicBadge id={relic.id} size={44} ringClass={RARITY_ACCENT[relic.rarity]} />
+              <RelicCardArt id={relic.id} rarity={relic.rarity} size={40} />
               <div className="relative min-w-0 flex-1">
                 <div
                   className={`text-sm font-bold ${RARITY_TEXT[relic.rarity]}`}
@@ -1695,7 +1631,7 @@ function ShopScreen({
                     "radial-gradient(circle at 50% 0%, currentColor, transparent 65%)",
                 }}
               />
-              <RelicBadge id={sp.kind} size={40} ringClass={RARITY_ACCENT[sp.rarity]} />
+              <RelicCardArt id={sp.kind} rarity={sp.rarity} size={52} />
               <span
                 className={`relative text-sm font-bold ${RARITY_TEXT[sp.rarity]}`}
               >
@@ -1764,10 +1700,10 @@ function ShopScreen({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,7,20,0.92)] p-4 backdrop-blur-sm">
           <div className="rc-panel rc-panel__corners max-h-[85vh] w-full max-w-2xl overflow-auto p-5">
             <div className="mb-3 flex items-center gap-2.5">
-              <RelicBadge
+              <RelicCardArt
                 id={pendingSpecial.kind}
-                size={34}
-                ringClass={RARITY_ACCENT[pendingSpecial.rarity]}
+                rarity={pendingSpecial.rarity}
+                size={30}
               />
               <h4 className="rc-title flex-1 text-lg">
                 {pendingSpecial.name}

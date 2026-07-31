@@ -258,7 +258,7 @@ export function RelicGlyph({
   );
 }
 
-/* ---- insignia circular con glow, reutilizada en tienda/recompensa/HUD ---- */
+/* ---- insignia circular con glow, reutilizada en HUD compacto ---- */
 export function RelicBadge({
   id,
   size = 40,
@@ -278,6 +278,43 @@ export function RelicBadge({
       }}
     >
       <RelicGlyph id={id} className="h-[58%] w-[58%]" />
+    </div>
+  );
+}
+
+/* ---- ficha en formato carta (mismo marco Chrome Holo que las cartas) ---- */
+const RARITY_HEX: Record<string, string> = {
+  common: "#94a3b8",
+  rare: "#38bdf8",
+  epic: "#e879f9",
+  legendary: "#ffe94d",
+};
+
+export function RelicCardArt({
+  id,
+  rarity,
+  size = 60,
+}: {
+  id: string;
+  rarity: "common" | "rare" | "epic" | "legendary";
+  size?: number;
+}) {
+  const accent = RARITY_HEX[rarity] ?? RARITY_HEX.common;
+  return (
+    <div
+      className="rc-card relative shrink-0"
+      style={{ width: size, height: size * 1.32 }}
+    >
+      <div
+        className="rc-card__frame"
+        style={{ borderColor: accent, boxShadow: `0 0 8px ${accent}55` }}
+      />
+      <div
+        className="absolute inset-0 z-[1] flex items-center justify-center"
+        style={{ color: accent, filter: `drop-shadow(0 0 6px ${accent}88)` }}
+      >
+        <RelicGlyph id={id} className="h-[58%] w-[58%]" />
+      </div>
     </div>
   );
 }

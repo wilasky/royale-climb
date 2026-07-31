@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap");
 
 /* ============================================================
    ROYALE CLIMB — sistema de diseño "Neon Arcade"
@@ -19,6 +20,16 @@
   --rc-ink: #f3f1ff;
   --rc-ink-dim: #9a93b5;
   --rc-font-display: "Courier New", ui-monospace, "Cascadia Code", monospace;
+  --rc-font-pixel: "Press Start 2P", "Courier New", ui-monospace, monospace;
+}
+
+/* ---------- numeros estilo pixel (fichas, mult, dinero, objetivos) ---------- */
+.rc-num {
+  font-family: var(--rc-font-pixel);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: none;
 }
 
 body {
@@ -229,9 +240,11 @@ body {
   color: var(--rc-ink-dim);
 }
 .rc-stat__value {
-  font-family: var(--rc-font-display);
-  font-weight: 800;
+  font-family: var(--rc-font-pixel);
+  font-weight: 400;
+  font-size: 0.92em;
   font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: none;
 }
 
 /* ---------- barra de progreso neon ---------- */
@@ -248,6 +261,69 @@ body {
   background: linear-gradient(90deg, var(--rc-cyan), var(--rc-magenta));
   box-shadow: 0 0 12px rgba(0, 229, 255, 0.6);
   transition: width 0.5s ease;
+}
+
+/* ---------- carta "Chrome Holo" (marco real, no mockup) ---------- */
+.rc-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: linear-gradient(160deg, #0c0b12 0%, #050409 100%);
+  border: 2px solid #2a2735;
+}
+.rc-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.08) 42%,
+    rgba(0, 229, 255, 0.16) 48%,
+    rgba(255, 46, 161, 0.16) 52%,
+    rgba(255, 255, 255, 0.08) 58%,
+    transparent 70%
+  );
+  background-size: 220% 220%;
+  animation: rcholoshift 5s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+@keyframes rcholoshift {
+  0%, 100% { background-position: 0% 0%; }
+  50% { background-position: 100% 100%; }
+}
+.rc-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px);
+}
+.rc-card__frame {
+  position: absolute;
+  inset: 3px;
+  z-index: 2;
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: 5px;
+  pointer-events: none;
+}
+.rc-card__frame::before, .rc-card__frame::after {
+  content: "";
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid #00e5ff;
+}
+.rc-card__frame::before { top: -1.5px; left: -1.5px; border-right: 0; border-bottom: 0; }
+.rc-card__frame::after { bottom: -1.5px; right: -1.5px; border-left: 0; border-top: 0; }
+.rc-card.rc-red .rc-card__frame { border-color: rgba(255, 46, 161, 0.4); }
+.rc-card.rc-red .rc-card__frame::before, .rc-card.rc-red .rc-card__frame::after { border-color: #ff2ea1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rc-card::before { animation: none; }
 }
 
 /* ---------- bandejas hundidas (mazo, mano, descarte) ---------- */
