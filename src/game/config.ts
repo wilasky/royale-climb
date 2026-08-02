@@ -53,6 +53,14 @@ export const SHOP_RELIC_COUNT = 2;
 export const SHOP_SPECIAL_COUNT = 3;
 
 /**
+ * Tope de modificadores activos simultáneos — Iteración 2B
+ * (docs/BALANCE_ITERATION_2B.md, sección 1). Con los espacios llenos,
+ * obtener un modificador nuevo exige sustituir uno existente (elección
+ * explícita del jugador, nunca automática) en vez de acumular sin límite.
+ */
+export const MAX_ACTIVE_RELICS = 6;
+
+/**
  * Pesos de rareza por fase (fase = ante actual, con tope en 3 -
  * ver `phaseForRound` en progression.ts). Un peso de 0 excluye esa
  * rareza por completo en esa fase (así se garantiza, no solo se hace

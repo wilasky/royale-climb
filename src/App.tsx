@@ -21,8 +21,9 @@ import {
   beginEndlessContinuation,
 } from "./game/progression";
 import { phaseForRound } from "./game/progression";
-import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT } from "./game/config";
+import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, MAX_ACTIVE_RELICS } from "./game/config";
 import { pickRelics } from "./game/rewards";
+import { hasRelicCapacity, replaceRelic } from "./game/relics";
 
 /* ============================================================
    ROYALE CLIMB — Roguelike de cartas con combos de póker
@@ -999,17 +1000,18 @@ function PlayScreen({
 
   return (
     <div className="mx-auto flex max-w-5xl gap-4 px-3 pb-6">
-      {gs.relics.length > 0 && (
-        <aside className="hidden w-[4.5rem] shrink-0 flex-col items-center gap-2 pt-1 sm:flex">
-          {gs.relics.map((r) => (
-            <Tooltip key={r.id} text={r.desc}>
-              <div>
-                <RelicCardArt id={r.id} rarity={r.rarity} size={52} />
-              </div>
-            </Tooltip>
-          ))}
-        </aside>
-      )}
+      <aside className="hidden w-[4.5rem] shrink-0 flex-col items-center gap-2 pt-1 sm:flex">
+        <span className="rc-eyebrow text-center" style={{ fontSize: "0.55rem" }}>
+          {gs.relics.length}/{MAX_ACTIVE_RELICS}
+        </span>
+        {gs.relics.map((r) => (
+          <Tooltip key={r.id} text={r.desc}>
+            <div>
+              <RelicCardArt id={r.id} rarity={r.rarity} size={52} />
+            </div>
+          </Tooltip>
+        ))}
+      </aside>
       <div className="min-w-0 flex-1">
       <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
         <StatBox label="Ronda" value={`${gs.round}`} accent="text-amber-300" />
@@ -1061,13 +1063,14 @@ function PlayScreen({
         </div>
       </div>
 
-      {gs.relics.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-1.5 sm:hidden">
-          {gs.relics.map((r) => (
-            <RelicChip key={r.id} relic={r} />
-          ))}
-        </div>
-      )}
+      <div className="mb-3 flex flex-wrap items-center gap-1.5 sm:hidden">
+        <span className="rc-eyebrow" style={{ fontSize: "0.55rem" }}>
+          {gs.relics.length}/{MAX_ACTIVE_RELICS}
+        </span>
+        {gs.relics.map((r) => (
+          <RelicChip key={r.id} relic={r} />
+        ))}
+      </div>
 
       <div
         className={`rc-panel rc-panel__corners relative mb-3 flex min-h-[5rem] items-center justify-between overflow-hidden p-4 ${
@@ -1327,8 +1330,11 @@ function RewardScreen({
     <div className="mx-auto max-w-3xl px-4 py-8 text-center">
       <p className="rc-eyebrow mb-2">Ronda {gs.round} superada</p>
       <h2 className="rc-title mb-1 text-3xl">ELIGE TU MODIFICADOR</h2>
-      <p className="mb-6 text-sm text-slate-400">
+      <p className="mb-2 text-sm text-slate-400">
         Cada elección define tu estrategia para el resto de la partida.
+      </p>
+      <p className="mb-6 text-xs text-slate-500">
+        Modificadores: {gs.relics.length}/{MAX_ACTIVE_RELICS}
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
         {offers.map((r) => (
@@ -1393,7 +1399,6 @@ function ShopScreen({
   );
   const [convSuit, setConvSuit] = useState<Suit>("spades");
   const [showSell, setShowSell] = useState(false);
-  const [boughtRelics, setBoughtRelics] = useState<string[]>([]);
   const [usedSpecials, setUsedSpecials] = useState<number[]>([]);
 
   const stock = useMemo(() => {
@@ -1428,10 +1433,12 @@ function ShopScreen({
         </span>
       </div>
 
-      <h3 className="rc-eyebrow mb-2">Modificadores</h3>
+      <h3 className="rc-eyebrow mb-2">
+        Modificadores ({gs.relics.length}/{MAX_ACTIVE_RELICS})
+      </h3>
       <div className="mb-8 grid gap-3 sm:grid-cols-2">
         {stock.relics.map(({ relic, price }) => {
-          const bought = boughtRelics.includes(relic.id);
+          const bought = gs.relics.some((r) => r.id === relic.id);
           const afford = gs.money >= price;
           return (
             <div
@@ -1458,10 +1465,7 @@ function ShopScreen({
               </div>
               <button
                 disabled={bought || !afford}
-                onClick={() => {
-                  onBuyRelic(relic, price);
-                  setBoughtRelics((b) => [...b, relic.id]);
-                }}
+                onClick={() => onBuyRelic(relic, price)}
                 className="rc-btn rc-btn-primary relative shrink-0 px-3 py-2 text-sm"
               >
                 {bought ? "✓" : `${price}`}
@@ -1634,6 +1638,71 @@ function ShopScreen({
   );
 }
 
+/* ---------------- Modal: sustituir modificador (cupo lleno) ---------------- */
+function RelicReplaceModal({
+  incoming,
+  current,
+  onConfirm,
+  onCancel,
+}: {
+  incoming: Relic;
+  current: Relic[];
+  onConfirm: (removeId: string) => void;
+  onCancel: () => void;
+}) {
+  const [selected, setSelected] = useState<string | null>(null);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,7,20,0.92)] p-4 backdrop-blur-sm">
+      <div className="rc-panel rc-panel__corners max-h-[85vh] w-full max-w-2xl overflow-auto p-5">
+        <div className="mb-3 flex items-center gap-2.5">
+          <RelicCardArt id={incoming.id} rarity={incoming.rarity} size={30} />
+          <h4 className="rc-title flex-1 text-lg">
+            {current.length}/{MAX_ACTIVE_RELICS} modificadores — elige cuál sustituir
+          </h4>
+          <button
+            onClick={onCancel}
+            className="rc-btn rc-btn-flat px-3 py-1 text-sm"
+          >
+            Cancelar
+          </button>
+        </div>
+        <p className="mb-3 text-sm text-slate-400">
+          Modificador nuevo:{" "}
+          <span className="font-bold text-slate-100">{incoming.name}</span> —{" "}
+          {incoming.desc}
+        </p>
+        <div className="mb-4 grid gap-2 sm:grid-cols-2">
+          {current.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => setSelected(r.id)}
+              className={`rc-panel rc-panel__corners flex items-center gap-3 p-3 text-left ring-1 transition-transform ${RARITY_RING[r.rarity]} ${
+                selected === r.id ? "scale-[1.02] ring-2 ring-rose-400" : ""
+              }`}
+            >
+              <RelicCardArt id={r.id} rarity={r.rarity} size={36} />
+              <div className="min-w-0 flex-1">
+                <div className={`text-sm font-bold ${RARITY_TEXT[r.rarity]}`}>
+                  {r.name}
+                </div>
+                <div className="text-xs text-slate-400">{r.desc}</div>
+              </div>
+              {selected === r.id && <span className="text-rose-300">✕</span>}
+            </button>
+          ))}
+        </div>
+        <button
+          disabled={!selected}
+          onClick={() => selected && onConfirm(selected)}
+          className="rc-btn rc-btn-primary w-full py-3 text-sm disabled:opacity-40"
+        >
+          Confirmar sustitución
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- Pantalla: Derrota ---------------- */
 function DefeatScreen({
   gs,
@@ -1779,6 +1848,11 @@ export default function App() {
   const [gs, setGs] = useState<GameState | null>(null);
   const [lastSeed, setLastSeed] = useState<number | null>(null);
   const [particles, setParticles] = useState<Particle[]>([]);
+  const [pendingRelicReplace, setPendingRelicReplace] = useState<{
+    incoming: Relic;
+    context: "reward" | "shop";
+    price?: number;
+  } | null>(null);
   const rewardRng = useRef<Rng>(makeRng(1));
   const shopRng = useRef<Rng>(makeRng(1));
 
@@ -1882,12 +1956,35 @@ export default function App() {
 
   const handleReward = (relic: Relic) => {
     if (!gs) return;
-    proceedAfterReward({ ...gs, relics: [...gs.relics, relic] });
+    if (hasRelicCapacity(gs.relics, MAX_ACTIVE_RELICS)) {
+      proceedAfterReward({ ...gs, relics: [...gs.relics, relic] });
+    } else {
+      setPendingRelicReplace({ incoming: relic, context: "reward" });
+    }
   };
   const handleSkipReward = () => {
     if (!gs) return;
     proceedAfterReward({ ...gs, money: gs.money + 4 });
   };
+
+  const handleConfirmRelicReplace = (removeId: string) => {
+    if (!gs || !pendingRelicReplace) return;
+    const { incoming, context, price } = pendingRelicReplace;
+    let g: GameState = {
+      ...gs,
+      relics: replaceRelic(gs.relics, removeId, incoming),
+    };
+    if (context === "shop" && price != null) {
+      g = { ...g, money: g.money - price };
+    }
+    setPendingRelicReplace(null);
+    if (context === "reward") {
+      proceedAfterReward(g);
+    } else {
+      setGs(g);
+    }
+  };
+  const handleCancelRelicReplace = () => setPendingRelicReplace(null);
 
   const handleContinueFromShop = () => {
     if (!gs) return;
@@ -1898,7 +1995,11 @@ export default function App() {
 
   const handleBuyRelic = (r: Relic, price: number) => {
     if (!gs || gs.money < price) return;
-    setGs({ ...gs, money: gs.money - price, relics: [...gs.relics, r] });
+    if (hasRelicCapacity(gs.relics, MAX_ACTIVE_RELICS)) {
+      setGs({ ...gs, money: gs.money - price, relics: [...gs.relics, r] });
+    } else {
+      setPendingRelicReplace({ incoming: r, context: "shop", price });
+    }
   };
 
   const handleApplySpecial = (
@@ -2061,6 +2162,15 @@ export default function App() {
             gs={gs}
             onContinueEndless={handleContinueEndless}
             onMenu={() => setScreen("menu")}
+          />
+        )}
+
+        {pendingRelicReplace && gs && (
+          <RelicReplaceModal
+            incoming={pendingRelicReplace.incoming}
+            current={gs.relics}
+            onConfirm={handleConfirmRelicReplace}
+            onCancel={handleCancelRelicReplace}
           />
         )}
       </div>
