@@ -549,3 +549,105 @@ penalización desproporcionada del Trono Partido a builds de multiplicador
 puro; posible dureza del Espejo Inestable para builds mono-arquetipo en
 ante 1. Ninguno de los 3 bosses se ha validado contra un playtest humano
 completo.
+
+# Changelog de gameplay — Iteración 2E
+
+Objetivo: que ganar una run tenga consecuencias para runs futuras, sin
+moneda permanente ni grindeo artificial. Explícitamente NO se tocó
+ningún objetivo de ronda, economía, precio, recompensa económica,
+rareza, coste de reroll/banish, synergy bias, valor de modificador
+existente, el límite de 6 modificadores ni ninguna regla de boss ya
+implementada. El rediseño artístico sigue pausado — solo UI provisional
+mínima con los componentes ya existentes.
+
+## 1. Coronación y perfil persistente
+
+Derrotar al boss final de la ronda 9 (run no-Endless) es ahora una
+**Coronación**, registrada en un `PlayerProfile` versionado en
+`localStorage` (`src/game/profile.ts`), independiente del `GameState`
+de la run: runs iniciadas/ganadas, bosses finales derrotados por id,
+mejores marcas (ronda/puntuación/jugada), dificultad máxima
+desbloqueada, Legados reclamados e historial de Coronaciones
+(`src/game/coronation.ts::CoronationRecord` — seed, puntuación, build
+dominante, modificadores activos, boss final, Juramento, fecha, si
+continuó en Endless). Carga segura con recuperación campo a campo ante
+datos corruptos; nunca lanza.
+
+## 2. Legados de la Corona
+
+Sistema data-driven (`src/game/legacies.ts::LegacyDefinition`) de
+desbloqueos permanentes ofrecidos tras cada Coronación: hasta 3
+opciones, deterministas por seed + nº de coronaciones + desbloqueos
+actuales, nunca repite un Legado ya reclamado, nunca inventa una
+recompensa si no queda ninguna disponible. 9 Legados diseñados (3 de
+contenido, 3 de nuevas formas de jugar, 3 de desafío), 3 implementados
+(uno por categoría): **Eco Prohibido** (desbloquea el boss El Eco del
+Trono), **Bolsillos Vacíos** (desbloquea esa variante de inicio) y
+**El Velo del Trono** (desbloquea el Juramento I). Los otros 6 quedan
+documentados, sin código de efecto.
+
+## 3. Boss desbloqueable — El Eco del Trono
+
+`src/game/bosses.ts` gana `locked: boolean` en `BossDefinition`.
+Nuevo boss para Ante 2 (candidato B aplazado en la 2D): la primera
+mano de la ronda puntúa a ×0.7 Mult para fijar un eco; cada mano
+posterior suma un bonus aditivo de Mult basado en la fuerza de esa
+primera mano. Bloqueado por defecto; `selectBossForAnte` acepta ahora
+un tercer parámetro `unlockedBossIds` que filtra los candidatos
+bloqueados — con el set vacío por defecto, el comportamiento de los 3
+bosses de la 2D es idéntico al de antes de esta iteración.
+
+## 4. Juramento I — El Velo del Trono
+
+`src/game/oaths.ts`. En vez de escalar un objetivo (+X% al estilo
+Stakes de Balatro), oculta el panel de telegraph "Próximo boss del
+ante": el jugador no sabe qué boss le espera hasta llegar a su ronda.
+No es hard counter — el boss sigue siendo superable adaptando
+decisiones en la ronda. 6 Juramentos diseñados en total; solo este
+está implementado, desbloqueado tras la primera Coronación.
+
+## 5. Variante de inicio — Bolsillos Vacíos
+
+`src/game/variants.ts`. 2$ iniciales en vez de 4$, con un descarte
+extra por ronda. Transforma únicamente el `GameState` inicial de la
+run que la elige explícitamente — sin ella, una run es idéntica a
+antes de esta iteración. 3 variantes diseñadas en total; solo esta
+está implementada.
+
+## 6. Pantalla de Coronación
+
+`WinScreen` (antes solo "victoria") ahora tiene 3 pasos: resumen de la
+Coronación (puntuación, mejor jugada, boss final, Juramento, build
+dominante) → elegir Legado (o "Todos los Legados disponibles han sido
+reclamados") → confirmación de lo desbloqueado → Seguir escalando /
+Nueva run / Menú principal. Elegir Endless tras seleccionar Legado
+sigue funcionando exactamente igual que antes — nunca se pierde la
+recompensa. Reutiliza los componentes visuales ya existentes, sin
+rediseño. Nuevo panel de depuración (`DevProfilePanel`, solo en
+`import.meta.env.DEV`) para inspeccionar/resetear/desbloquear el
+perfil durante desarrollo.
+
+## 7. Pruebas añadidas
+
+218 tests en 16 archivos (antes 216 en 16 tras el commit 6; 138 antes
+de toda la iteración 2E). Nuevos `profile.test.ts`, `coronation.test.ts`,
+`legacies.test.ts`, `oaths.test.ts`, `variants.test.ts`: perfil nuevo/
+persistencia/carga/datos corruptos/versión/migración/estadísticas,
+Coronación registrada solo en victoria (nunca en derrota), Endless
+posterior no elimina la Coronación, oferta de hasta 3 Legados
+determinista y sin duplicados, comportamiento con menos de 3
+disponibles y con todos reclamados, boss desbloqueable (no aparece
+bloqueado, aparece tras desbloqueo, selección determinista, regla
+completa, paridad preview/ejecución), efecto real del Juramento I, y
+que la variante de inicio no afecta a runs normales. Los 138 tests de
+las iteraciones 2A-2D siguen pasando sin cambios de comportamiento.
+
+## 8. Riesgos pendientes
+
+Ver `docs/METAPROGRESSION_2E.md` secciones 11-12 — los 6 Legados/5
+Juramentos/2 variantes documentados pero no implementados son solo
+diseño; El Eco del Trono no se ha validado con playtest humano y su
+interacción con "Salida en Falso" (ambos dependen de la primera mano
+de la ronda) puede sentirse redundante; "Nueva run" desde la pantalla
+de Coronación no conserva el Juramento/variante de la run recién
+ganada.

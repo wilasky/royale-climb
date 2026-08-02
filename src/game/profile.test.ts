@@ -155,6 +155,26 @@ describe("recordRunStart", () => {
   });
 });
 
+describe("victoria registra Coronación; derrota no (docs/METAPROGRESSION_2E.md, sección 13)", () => {
+  it("recordRunStart en solitario (equivalente a una run que termina en derrota) no crea ninguna Coronación", () => {
+    // App.tsx solo llama a recordCoronation en la rama outcome.type === "victory"
+    // de handleWinRound; DefeatScreen nunca la invoca. Aquí se comprueba la
+    // mitad de ese contrato que sí es una función pura testeable: iniciar una
+    // run (recordRunStart) por sí solo, sin una Coronación real, dejando
+    // `coronations` y `runsWon` intactos.
+    const p = recordRunStart(recordRunStart(defaultProfile()));
+    expect(p.runsStarted).toBe(2);
+    expect(p.runsWon).toBe(0);
+    expect(p.coronations).toEqual([]);
+  });
+
+  it("una Coronación real sí incrementa runsWon y el historial, independientemente de runsStarted", () => {
+    const p = recordCoronation(recordRunStart(defaultProfile()), record(), 9, 100);
+    expect(p.runsWon).toBe(1);
+    expect(p.coronations).toHaveLength(1);
+  });
+});
+
 describe("recordCoronation", () => {
   it("una victoria incrementa runsWon, guarda el registro y actualiza mejores marcas", () => {
     const p = defaultProfile();
