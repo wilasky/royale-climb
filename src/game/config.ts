@@ -135,3 +135,14 @@ export const RELIC_PRICE_BY_RARITY: Record<Rarity, number> = {
  * sistemáticamente correcta.
  */
 export const DECLINE_RELIC_COMPENSATION = 3;
+
+/**
+ * Reroll de la recompensa gratuita de modificador — Iteración 2C
+ * (docs/BUILD_AGENCY_ITERATION_2C.md, sección 3). Coste creciente por
+ * intento; el índice se limita al último valor del array una vez
+ * agotada la lista (así "tercero y siguientes" reutiliza el último
+ * coste sin necesidad de un caso especial). Se reinicia en cada
+ * recompensa nueva — el contador vive en el componente, no en `gs`.
+ */
+export const REWARD_REROLL_COSTS = [3, 5, 7];
+export const REWARD_REROLL_MAX = 3;

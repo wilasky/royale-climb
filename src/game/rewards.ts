@@ -56,3 +56,38 @@ export function pickRelics(
 
   return picks;
 }
+
+/**
+ * Igual que `pickRelics`, pero para rerolls — Iteración 2C
+ * (docs/BUILD_AGENCY_ITERATION_2C.md, secciones 3 y 4). Si el resultado
+ * coincide exactamente con `avoidExactMatch` (la oferta anterior) y el
+ * pool tiene margen para una alternativa real, vuelve a tirar una vez
+ * más. No es una garantía de que la nueva oferta sea distinta (con un
+ * pool muy reducido puede no haber alternativa), solo evita el caso
+ * más chocante: pagar por un reroll y recibir exactamente lo mismo
+ * pudiendo haber sido distinto.
+ */
+export function pickRelicsAvoidingRepeat(
+  rng: Rng,
+  pool: Relic[],
+  ownedIds: ReadonlySet<string>,
+  count: number,
+  weights: RarityWeights,
+  avoidExactMatch?: ReadonlySet<string>
+): Relic[] {
+  let picks = pickRelics(rng, pool, ownedIds, count, weights);
+
+  if (
+    avoidExactMatch &&
+    picks.length > 0 &&
+    picks.length === avoidExactMatch.size &&
+    picks.every((r) => avoidExactMatch.has(r.id))
+  ) {
+    const remainingCandidates = pool.filter((r) => !ownedIds.has(r.id));
+    if (remainingCandidates.length > count) {
+      picks = pickRelics(rng, pool, ownedIds, count, weights);
+    }
+  }
+
+  return picks;
+}

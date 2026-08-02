@@ -21,8 +21,9 @@ import {
   beginEndlessContinuation,
 } from "./game/progression";
 import { phaseForRound } from "./game/progression";
-import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION } from "./game/config";
-import { pickRelics } from "./game/rewards";
+import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION, REWARD_REROLL_COSTS, REWARD_REROLL_MAX } from "./game/config";
+import { pickRelics, pickRelicsAvoidingRepeat } from "./game/rewards";
+import { rerollCost, canReroll } from "./game/rerolls";
 import { hasRelicCapacity, replaceRelic } from "./game/relics";
 import { roundClearBaseReward, computeInterest, relicPrice } from "./game/economy";
 
@@ -1314,18 +1315,47 @@ function RewardScreen({
   rng,
   onChoose,
   onSkip,
+  onRerollSpend,
 }: {
   gs: GameState;
   rng: Rng;
   onChoose: (relic: Relic) => void;
   onSkip: () => void;
+  onRerollSpend: (cost: number) => void;
 }) {
-  const offers = useMemo(() => {
+  const [offers, setOffers] = useState<Relic[]>(() => {
     const owned = new Set(gs.relics.map((r) => r.id));
     const weights = REWARD_WEIGHTS[phaseForRound(gs.round)];
     return pickRelics(rng, RELIC_POOL, owned, REWARD_OFFER_COUNT, weights);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  });
+  const [rerollCount, setRerollCount] = useState(0);
+
+  const rerollAllowed = canReroll(
+    rerollCount,
+    REWARD_REROLL_MAX,
+    gs.money,
+    REWARD_REROLL_COSTS
+  );
+  const nextRerollCost = rerollCost(REWARD_REROLL_COSTS, rerollCount);
+
+  const handleReroll = () => {
+    if (!rerollAllowed) return;
+    onRerollSpend(nextRerollCost);
+    const owned = new Set(gs.relics.map((r) => r.id));
+    const weights = REWARD_WEIGHTS[phaseForRound(gs.round)];
+    const previousIds = new Set(offers.map((r) => r.id));
+    setOffers(
+      pickRelicsAvoidingRepeat(
+        rng,
+        RELIC_POOL,
+        owned,
+        REWARD_OFFER_COUNT,
+        weights,
+        previousIds
+      )
+    );
+    setRerollCount((c) => c + 1);
+  };
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 text-center">
@@ -1369,12 +1399,23 @@ function RewardScreen({
           </p>
         )}
       </div>
-      <button
-        onClick={onSkip}
-        className="rc-btn rc-btn-flat mt-6 px-5 py-2 text-sm"
-      >
-        Saltar (+{DECLINE_RELIC_COMPENSATION}$)
-      </button>
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+        <button
+          onClick={onSkip}
+          className="rc-btn rc-btn-flat px-5 py-2 text-sm"
+        >
+          Saltar (+{DECLINE_RELIC_COMPENSATION}$)
+        </button>
+        {rerollCount < REWARD_REROLL_MAX && (
+          <button
+            onClick={handleReroll}
+            disabled={!rerollAllowed}
+            className="rc-btn rc-btn-flat px-5 py-2 text-sm disabled:opacity-40"
+          >
+            Volver a tirar ({nextRerollCost}$)
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -2002,6 +2043,11 @@ export default function App() {
     advanceToNextRound({ ...gs, money: gs.money + DECLINE_RELIC_COMPENSATION });
   };
 
+  const handleRewardRerollSpend = (cost: number) => {
+    if (!gs) return;
+    setGs({ ...gs, money: gs.money - cost });
+  };
+
   const handleMoneyRewardContinue = () => {
     if (!gs) return;
     advanceToNextRound(gs);
@@ -2173,6 +2219,7 @@ export default function App() {
             rng={rewardRng.current}
             onChoose={handleReward}
             onSkip={handleSkipReward}
+            onRerollSpend={handleRewardRerollSpend}
           />
         )}
 
