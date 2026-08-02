@@ -82,11 +82,13 @@ import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS
 import { pickRelicOffer } from "./game/offers";
 import { rerollCost, canReroll } from "./game/rerolls";
 import { canBanish, banishCost, applyBanish } from "./game/banish";
-import { dominantArchetypes } from "./game/buildIdentity";
+import { dominantArchetypes, computeBuildIdentity } from "./game/buildIdentity";
+import type { AffinityStrength } from "./game/buildIdentity";
 import { ARCHETYPE_LABELS } from "./game/archetypes";
 import { logRelicOfferDebug } from "./game/debug";
 import { hasRelicCapacity, replaceRelic } from "./game/relics";
 import { roundClearBaseReward, computeInterest, relicPrice } from "./game/economy";
+import { relicSummary } from "./game/relicSummaries";
 
 /* ============================================================
    ROYALE CLIMB — Roguelike de cartas con combos de póker
@@ -649,21 +651,6 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
   );
 }
 
-function RelicChip({ relic }: { relic: Relic }) {
-  return (
-    <Tooltip text={relic.desc}>
-      <div
-        className={`flex items-center gap-1.5 rounded-lg border bg-[#12101c]/90 py-1 pl-1 pr-2 ring-1 ${RARITY_RING[relic.rarity]} ${RARITY_GLOW[relic.rarity]}`}
-      >
-        <RelicBadge id={relic.id} size={22} ringClass={RARITY_ACCENT[relic.rarity]} />
-        <span className={`text-xs font-semibold ${RARITY_TEXT[relic.rarity]}`}>
-          {relic.name}
-        </span>
-      </div>
-    </Tooltip>
-  );
-}
-
 function StatBox({
   label,
   value,
@@ -679,6 +666,106 @@ function StatBox({
       <div className={`rc-stat__value text-lg ${accent ?? "text-slate-100"}`}>
         {value}
       </div>
+    </div>
+  );
+}
+
+/* ---------------- Panel de afinidad de build (Iteración 2G, sección 1) ---------------- */
+const STRENGTH_DOTS: Record<AffinityStrength, number> = {
+  none: 0,
+  weak: 1,
+  moderate: 2,
+  strong: 3,
+};
+const STRENGTH_LABEL: Record<AffinityStrength, string> = {
+  none: "sin afinidad",
+  weak: "débil",
+  moderate: "media",
+  strong: "fuerte",
+};
+
+/**
+ * Máximo 2 arquetipos, nunca GENERAL, sin pesos ni porcentajes internos
+ * — reutiliza computeBuildIdentity (Iteración 2C) tal cual, no
+ * recalcula afinidades por su cuenta (docs/GAME_FEEL_2G.md, sección 1).
+ */
+function BuildAffinityPanel({ relics }: { relics: Relic[] }) {
+  const { affinities } = computeBuildIdentity(relics);
+  const shown = affinities.filter((a) => a.archetype !== "GENERAL").slice(0, 2);
+  if (shown.length === 0) return null;
+  return (
+    <div className="rc-panel mb-3 p-3">
+      <div className="rc-eyebrow mb-1.5" style={{ fontSize: "0.6rem" }}>
+        Build
+      </div>
+      <div className="flex flex-col gap-1">
+        {shown.map((a) => (
+          <div
+            key={a.archetype}
+            className="flex items-center justify-between gap-2"
+            aria-label={`${ARCHETYPE_LABELS[a.archetype]}: afinidad ${STRENGTH_LABEL[a.strength]}`}
+          >
+            <span className="text-xs text-slate-300">
+              {ARCHETYPE_LABELS[a.archetype]}
+            </span>
+            <span aria-hidden="true" className="font-mono text-sm tracking-widest text-amber-300">
+              {"●".repeat(STRENGTH_DOTS[a.strength])}
+              <span className="text-slate-700">
+                {"●".repeat(3 - STRENGTH_DOTS[a.strength])}
+              </span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Panel de modificadores activos (Iteración 2G, sección 2) ---------------- */
+function ModifierRow({ relic }: { relic: Relic }) {
+  const summary = relicSummary(relic.id);
+  return (
+    <Tooltip text={relic.desc}>
+      <div
+        className={`flex w-full items-center gap-2 rounded-lg border bg-[#12101c]/90 px-2 py-1.5 text-left ring-1 ${RARITY_RING[relic.rarity]} ${RARITY_GLOW[relic.rarity]}`}
+      >
+        <RelicBadge id={relic.id} size={26} ringClass={RARITY_ACCENT[relic.rarity]} />
+        <div className="min-w-0 flex-1">
+          <div className={`truncate text-xs font-semibold ${RARITY_TEXT[relic.rarity]}`}>
+            {relic.name}
+          </div>
+          {summary && (
+            <div className="truncate text-[10px] text-slate-500">
+              {summary.condition} <span className="text-slate-600">→</span>{" "}
+              {summary.effect}
+            </div>
+          )}
+        </div>
+      </div>
+    </Tooltip>
+  );
+}
+
+function ModifiersPanel({ relics }: { relics: Relic[] }) {
+  return (
+    <div className="rc-panel mb-3 p-3">
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <span className="rc-eyebrow" style={{ fontSize: "0.6rem" }}>
+          Modificadores
+        </span>
+        <span className="rc-num text-xs text-slate-400">
+          {relics.length}/{MAX_ACTIVE_RELICS}
+        </span>
+      </div>
+      {relics.length === 0 ? (
+        <p className="text-xs text-slate-600">Ninguno todavía.</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {relics.map((r) => (
+            <ModifierRow key={r.id} relic={r} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1360,36 +1447,19 @@ function PlayScreen({
 
   const progress = Math.min(100, (gs.scoreThisRound / gs.target) * 100);
 
-  // Etiqueta discreta de identidad de build (docs/BUILD_AGENCY_ITERATION_2C.md,
-  // sección 8): máximo 2 arquetipos, solo con afinidad suficiente, nunca
-  // GENERAL ni números/pesos internos.
-  const buildArchetypeLabels = dominantArchetypes(
-    gs.relics,
-    SYNERGY_MIN_AFFINITY,
-    2
-  ).map((a) => ARCHETYPE_LABELS[a]);
-  const buildLabel =
-    buildArchetypeLabels.length === 1
-      ? `Build: ${buildArchetypeLabels[0]}`
-      : buildArchetypeLabels.length === 2
-      ? `Afinidad: ${buildArchetypeLabels.join(" · ")}`
-      : null;
-
   return (
-    <div className="mx-auto flex max-w-5xl gap-4 px-3 pb-6">
-      <aside className="hidden w-[4.5rem] shrink-0 flex-col items-center gap-2 pt-1 sm:flex">
-        <span className="rc-eyebrow text-center" style={{ fontSize: "0.55rem" }}>
-          {gs.relics.length}/{MAX_ACTIVE_RELICS}
-        </span>
-        {gs.relics.map((r) => (
-          <Tooltip key={r.id} text={r.desc}>
-            <div>
-              <RelicCardArt id={r.id} rarity={r.rarity} size={52} />
-            </div>
-          </Tooltip>
-        ))}
-      </aside>
-      <div className="min-w-0 flex-1">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 px-3 pb-6 lg:flex-row lg:items-start">
+      {/* Panel persistente de build/modificadores (Iteración 2G, docs/GAME_FEEL_2G.md,
+          secciones 1-2): reutiliza computeBuildIdentity (2C) tal cual, nunca duplica
+          el cálculo de afinidad. order-2 en todos los tamaños: en pantallas
+          estrechas queda debajo del área de juego (cartas primero, sección 10
+          del encargo — prioridad de información), en pantallas anchas se
+          convierte en columna lateral fija a la derecha (lg:flex-row). */}
+      <div className="order-2 flex flex-col gap-3 lg:w-64 lg:shrink-0">
+        <BuildAffinityPanel relics={gs.relics} />
+        <ModifiersPanel relics={gs.relics} />
+      </div>
+      <div className="order-1 min-w-0 flex-1">
       <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
         <StatBox label="Ronda" value={`${gs.round}`} accent="text-amber-300" />
         <StatBox label="Ante" value={`${gs.ante}`} accent="text-fuchsia-300" />
@@ -1413,10 +1483,6 @@ function PlayScreen({
           value={`${gs.drawPile.length}/${gs.deck.length}`}
         />
       </div>
-
-      {buildLabel && (
-        <p className="mb-3 text-xs text-slate-500">{buildLabel}</p>
-      )}
 
       {/* Panel de boss activo / telegraph del próximo boss del ante —
           Iteración 2D, sección 7-8. Sin bosses en Endless. */}
@@ -1516,15 +1582,6 @@ function PlayScreen({
         <div className="rc-bar">
           <div className="rc-bar__fill" style={{ width: `${progress}%` }} />
         </div>
-      </div>
-
-      <div className="mb-3 flex flex-wrap items-center gap-1.5 sm:hidden">
-        <span className="rc-eyebrow" style={{ fontSize: "0.55rem" }}>
-          {gs.relics.length}/{MAX_ACTIVE_RELICS}
-        </span>
-        {gs.relics.map((r) => (
-          <RelicChip key={r.id} relic={r} />
-        ))}
       </div>
 
       <div
