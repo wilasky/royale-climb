@@ -16,7 +16,7 @@ import { scorePlay, glassRisk, diamondMoneyPreview } from "./game/scoring";
 import {
   targetForRound,
   anteOfRound,
-  resolveAfterReward,
+  resolveRoundReward,
   resolveAfterShop,
   beginEndlessContinuation,
 } from "./game/progression";
@@ -1378,6 +1378,37 @@ function RewardScreen({
   );
 }
 
+/* ---------------- Pantalla: Recompensa económica ---------------- */
+function MoneyRewardScreen({
+  gs,
+  onContinue,
+}: {
+  gs: GameState;
+  onContinue: () => void;
+}) {
+  const reward = useMemo(
+    () => resolveRoundReward(gs.round, gs.endless),
+    [gs.round, gs.endless]
+  );
+  const amount = reward.type === "money" ? reward.amount : 0;
+  return (
+    <div className="mx-auto max-w-lg px-4 py-16 text-center">
+      <p className="rc-eyebrow mb-2">Ronda {gs.round} superada</p>
+      <h2 className="rc-title mb-6 text-3xl">RECOMPENSA ECONÓMICA</h2>
+      <div className="rc-panel rc-panel__corners mb-6 flex flex-col items-center gap-1 p-8">
+        <span className="rc-num text-4xl text-emerald-300">+{amount}$</span>
+        <span className="text-xs text-slate-500">Total: ${gs.money}</span>
+      </div>
+      <button
+        onClick={onContinue}
+        className="rc-btn rc-btn-primary w-full py-4 text-lg"
+      >
+        Continuar →
+      </button>
+    </div>
+  );
+}
+
 /* ---------------- Pantalla: Tienda ---------------- */
 function ShopScreen({
   gs,
@@ -1929,42 +1960,58 @@ export default function App() {
     setScreen("play");
   };
 
+  // Flujo de fin de ronda - ver docs/BALANCE_ITERATION_2B.md sección 2 y
+  // src/game/progression.ts. `resolveRoundReward` decide de entrada (al
+  // ganar la ronda) qué tipo de recompensa toca: modificador, dinero,
+  // tienda o victoria - ya no hay una pantalla de recompensa universal
+  // que luego decida si además toca tienda/victoria.
   const handleWinRound = (g: GameState) => {
-    setGs(g);
-    setScreen("reward");
-  };
-
-  // Flujo de fin de ronda - ver docs/GAME_AUDIT.md P0-1 y
-  // src/game/progression.ts. La victoria se decide aquí (solo en
-  // Nueva partida, exactamente en la ronda final); la tienda ya no
-  // fuerza nunca la pantalla de victoria al continuar.
-  const proceedAfterReward = (g: GameState) => {
-    setGs(g);
-    const outcome = resolveAfterReward(g.round, g.endless);
+    const outcome = resolveRoundReward(g.round, g.endless);
     if (outcome.type === "victory") {
+      setGs(g);
       setScreen("win");
       return;
     }
     if (outcome.type === "shop") {
+      setGs(g);
       shopRng.current = makeRng(g.seed + g.round * 31337);
       setScreen("shop");
       return;
     }
-    setGs(startRound(g, g.round + 1));
+    if (outcome.type === "relic") {
+      setGs(g);
+      setScreen("reward");
+      return;
+    }
+    // outcome.type === "money"
+    setGs({ ...g, money: g.money + outcome.amount });
+    setScreen("money-reward");
+  };
+
+  /** Avanza siempre a la ronda siguiente - `handleWinRound` ya resolvió
+   *  una sola vez si tocaba tienda/victoria antes de llegar aquí. */
+  const advanceToNextRound = (g: GameState) => {
+    const { nextRound } = resolveAfterShop(g.round);
+    setGs(startRound(g, nextRound));
     setScreen("play");
   };
 
   const handleReward = (relic: Relic) => {
     if (!gs) return;
     if (hasRelicCapacity(gs.relics, MAX_ACTIVE_RELICS)) {
-      proceedAfterReward({ ...gs, relics: [...gs.relics, relic] });
+      advanceToNextRound({ ...gs, relics: [...gs.relics, relic] });
     } else {
       setPendingRelicReplace({ incoming: relic, context: "reward" });
     }
   };
   const handleSkipReward = () => {
     if (!gs) return;
-    proceedAfterReward({ ...gs, money: gs.money + 4 });
+    advanceToNextRound({ ...gs, money: gs.money + 4 });
+  };
+
+  const handleMoneyRewardContinue = () => {
+    if (!gs) return;
+    advanceToNextRound(gs);
   };
 
   const handleConfirmRelicReplace = (removeId: string) => {
@@ -1979,7 +2026,7 @@ export default function App() {
     }
     setPendingRelicReplace(null);
     if (context === "reward") {
-      proceedAfterReward(g);
+      advanceToNextRound(g);
     } else {
       setGs(g);
     }
@@ -1988,9 +2035,7 @@ export default function App() {
 
   const handleContinueFromShop = () => {
     if (!gs) return;
-    const { nextRound } = resolveAfterShop(gs.round);
-    setGs(startRound(gs, nextRound));
-    setScreen("play");
+    advanceToNextRound(gs);
   };
 
   const handleBuyRelic = (r: Relic, price: number) => {
@@ -2136,6 +2181,10 @@ export default function App() {
             onChoose={handleReward}
             onSkip={handleSkipReward}
           />
+        )}
+
+        {screen === "money-reward" && gs && (
+          <MoneyRewardScreen gs={gs} onContinue={handleMoneyRewardContinue} />
         )}
 
         {screen === "shop" && gs && (

@@ -92,3 +92,16 @@ export const SHOP_WEIGHTS: Record<RewardPhase, RarityWeights> = {
   2: { common: 35, rare: 35, epic: 22, legendary: 8 },
   3: { common: 22, rare: 30, epic: 28, legendary: 20 },
 };
+
+/**
+ * Recompensa económica determinista por fase — Iteración 2B
+ * (docs/BALANCE_ITERATION_2B.md, sección 3). Reutiliza el mismo
+ * concepto de fase que las tablas de rareza (tope en fase 3, así que
+ * Endless hereda el mismo importe que la segunda mitad de Nueva
+ * partida sin necesitar un caso especial).
+ */
+export const MONEY_REWARD_BY_PHASE: Record<RewardPhase, number> = {
+  1: 6,
+  2: 9,
+  3: 12,
+};

@@ -6,7 +6,14 @@
 
 export type Suit = "spades" | "hearts" | "diamonds" | "clubs";
 export type Rarity = "common" | "rare" | "epic" | "legendary";
-export type Screen = "menu" | "play" | "reward" | "shop" | "defeat" | "win";
+export type Screen =
+  | "menu"
+  | "play"
+  | "reward"
+  | "money-reward"
+  | "shop"
+  | "defeat"
+  | "win";
 
 export interface Card {
   id: string;

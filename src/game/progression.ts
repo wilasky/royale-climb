@@ -9,6 +9,7 @@ import {
   SHOP_EVERY_N_ROUNDS,
   ROUND_TARGETS,
   ENDLESS_TARGET_GROWTH,
+  MONEY_REWARD_BY_PHASE,
 } from "./config";
 import type { RewardPhase } from "./config";
 
@@ -53,21 +54,29 @@ export function isNormalRunComplete(round: number, endless: boolean): boolean {
   return !endless && round === ROUNDS_PER_RUN;
 }
 
-export type RoundOutcome =
+export type RoundReward =
   | { type: "victory" } // solo Nueva partida, exactamente en ROUNDS_PER_RUN
-  | { type: "shop" } // ronda de tienda (ambos modos)
-  | { type: "next-round" }; // continuar directo a la siguiente ronda
+  | { type: "shop" } // múltiplos de ROUNDS_PER_ANTE (3, 6, 9, 12...)
+  | { type: "relic" } // round % ROUNDS_PER_ANTE === 1 (1, 4, 7, 10...)
+  | { type: "money"; amount: number }; // round % ROUNDS_PER_ANTE === 2 (2, 5, 8, 11...)
 
 /**
- * Qué ocurre después de resolver la recompensa de una ronda.
- * Sustituye a la lógica anterior (P0-1): la victoria se decide AQUÍ,
- * no al salir de la tienda - así no hay rama muerta ni tienda forzada
- * a terminar siempre en pantalla de victoria.
+ * Qué tipo de recompensa toca al ganar esta ronda — Iteración 2B
+ * (docs/BALANCE_ITERATION_2B.md, sección 2). Sustituye a
+ * `resolveAfterReward`/`RoundOutcome` de la 2A: aquella decidía qué pasaba
+ * DESPUÉS de resolver una recompensa que siempre era de modificador; esta
+ * decide DE ENTRADA qué tipo de recompensa mostrar, porque ahora una ronda
+ * ofrece exactamente una de tres cosas (modificador, dinero o tienda), no
+ * las 9 rondas por igual. La victoria se sigue decidiendo aquí, no al
+ * salir de la tienda, para no forzar nunca la pantalla de victoria al
+ * continuar desde una tienda intermedia.
  */
-export function resolveAfterReward(round: number, endless: boolean): RoundOutcome {
+export function resolveRoundReward(round: number, endless: boolean): RoundReward {
   if (isNormalRunComplete(round, endless)) return { type: "victory" };
   if (isShopRound(round)) return { type: "shop" };
-  return { type: "next-round" };
+  const cyclePos = round % ROUNDS_PER_ANTE; // 0 ya cubierto arriba (isShopRound)
+  if (cyclePos === 1) return { type: "relic" };
+  return { type: "money", amount: MONEY_REWARD_BY_PHASE[phaseForRound(round)] };
 }
 
 /** Tras la tienda, ambos modos continúan siempre a la siguiente ronda. */

@@ -4,33 +4,49 @@ import {
   anteOfRound,
   isShopRound,
   phaseForRound,
-  resolveAfterReward,
+  resolveRoundReward,
   resolveAfterShop,
   beginEndlessContinuation,
 } from "./progression";
 import { ROUNDS_PER_RUN } from "./config";
 
-describe("flujo de una run - Nueva partida (no endless)", () => {
-  it("no termina tras la ronda 3 (abre tienda)", () => {
-    expect(resolveAfterReward(3, false)).toEqual({ type: "shop" });
+describe("cadencia de recompensas - Nueva partida (no endless)", () => {
+  it("ronda 1: modificador", () => {
+    expect(resolveRoundReward(1, false)).toEqual({ type: "relic" });
   });
 
-  it("no termina tras la ronda 6 (abre tienda)", () => {
-    expect(resolveAfterReward(6, false)).toEqual({ type: "shop" });
+  it("ronda 2: recompensa económica (fase 1, 6$)", () => {
+    expect(resolveRoundReward(2, false)).toEqual({ type: "money", amount: 6 });
   });
 
-  it("termina en victoria tras la ronda 9", () => {
-    expect(resolveAfterReward(ROUNDS_PER_RUN, false)).toEqual({
+  it("ronda 3: tienda", () => {
+    expect(resolveRoundReward(3, false)).toEqual({ type: "shop" });
+  });
+
+  it("ronda 4: modificador", () => {
+    expect(resolveRoundReward(4, false)).toEqual({ type: "relic" });
+  });
+
+  it("ronda 5: recompensa económica (fase 2, 9$)", () => {
+    expect(resolveRoundReward(5, false)).toEqual({ type: "money", amount: 9 });
+  });
+
+  it("ronda 6: tienda", () => {
+    expect(resolveRoundReward(6, false)).toEqual({ type: "shop" });
+  });
+
+  it("ronda 7: modificador", () => {
+    expect(resolveRoundReward(7, false)).toEqual({ type: "relic" });
+  });
+
+  it("ronda 8: recompensa económica (fase 3, 12$)", () => {
+    expect(resolveRoundReward(8, false)).toEqual({ type: "money", amount: 12 });
+  });
+
+  it("ronda 9: victoria (pisa el shop natural de round % 3 === 0)", () => {
+    expect(resolveRoundReward(ROUNDS_PER_RUN, false)).toEqual({
       type: "victory",
     });
-  });
-
-  it("continúa a la siguiente ronda en las rondas que no son de tienda ni la final", () => {
-    for (const round of [1, 2, 4, 5, 7, 8]) {
-      expect(resolveAfterReward(round, false)).toEqual({
-        type: "next-round",
-      });
-    }
   });
 
   it("tras la tienda, continúa siempre a la ronda siguiente (nunca fuerza victoria)", () => {
@@ -46,28 +62,26 @@ describe("flujo de una run - Nueva partida (no endless)", () => {
   });
 });
 
-describe("flujo de una run - Modo Endless", () => {
-  it("no termina (nunca victoria) en las rondas 3, 6 o 9 - abre tienda en su lugar", () => {
-    for (const round of [3, 6, 9]) {
-      expect(resolveAfterReward(round, true)).toEqual({ type: "shop" });
-    }
+describe("cadencia de recompensas - Modo Endless", () => {
+  it("extiende el mismo ciclo de 3 rondas indefinidamente más allá de la 9", () => {
+    expect(resolveRoundReward(10, true)).toEqual({ type: "relic" });
+    expect(resolveRoundReward(11, true)).toEqual({ type: "money", amount: 12 }); // fase 3
+    expect(resolveRoundReward(12, true)).toEqual({ type: "shop" });
+    expect(resolveRoundReward(13, true)).toEqual({ type: "relic" });
+    expect(resolveRoundReward(14, true)).toEqual({ type: "money", amount: 12 });
+    expect(resolveRoundReward(15, true)).toEqual({ type: "shop" });
   });
 
-  it("sigue sin terminar más allá de la ronda 9 en múltiplos de 3", () => {
-    for (const round of [12, 15, 30]) {
-      expect(resolveAfterReward(round, true)).toEqual({ type: "shop" });
+  it("no termina (nunca victoria) en las rondas 3, 6 o 9 - abre tienda en su lugar", () => {
+    for (const round of [3, 6, 9]) {
+      expect(resolveRoundReward(round, true)).toEqual({ type: "shop" });
     }
   });
 
   it("nunca devuelve 'victory' en modo endless, para ninguna ronda razonable", () => {
     for (let round = 1; round <= 40; round++) {
-      expect(resolveAfterReward(round, true).type).not.toBe("victory");
+      expect(resolveRoundReward(round, true).type).not.toBe("victory");
     }
-  });
-
-  it("continúa a la siguiente ronda en rondas normales", () => {
-    expect(resolveAfterReward(10, true)).toEqual({ type: "next-round" });
-    expect(resolveAfterReward(11, true)).toEqual({ type: "next-round" });
   });
 });
 
