@@ -21,9 +21,10 @@ import {
   beginEndlessContinuation,
 } from "./game/progression";
 import { phaseForRound } from "./game/progression";
-import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, MAX_ACTIVE_RELICS } from "./game/config";
+import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION } from "./game/config";
 import { pickRelics } from "./game/rewards";
 import { hasRelicCapacity, replaceRelic } from "./game/relics";
+import { roundClearBaseReward, computeInterest, relicPrice } from "./game/economy";
 
 /* ============================================================
    ROYALE CLIMB — Roguelike de cartas con combos de póker
@@ -374,7 +375,7 @@ const RELIC_POOL: Relic[] = [
   { id: "ace_chip", name: "As bajo la Manga", desc: "Cada As jugado da +25 fichas.", rarity: "rare", icon: "🅰️" },
   { id: "pair_chain", name: "Cadena Doble", desc: "Doble pareja otorga +4 Mult y +30 fichas.", rarity: "rare", icon: "⛓️" },
   { id: "scaling_round", name: "Bola de Nieve", desc: "+0.5 Mult permanente cada ronda superada.", rarity: "epic", icon: "❄️" },
-  { id: "interest", name: "Banca Privada", desc: "Al fin de ronda ganas 1$ por cada 5$ que tengas (máx 6$).", rarity: "epic", icon: "🏦" },
+  { id: "interest", name: "Banca Privada", desc: "Al fin de ronda ganas 1$ por cada 6$ que tengas (máx 4$).", rarity: "epic", icon: "🏦" },
   { id: "glass_master", name: "Maestro del Vidrio", desc: "Cartas de cristal: x4 en vez de x2 y nunca se rompen.", rarity: "epic", icon: "🔮" },
   { id: "small_hand", name: "Minimalista", desc: "Jugar 1-2 cartas: +50 fichas y +4 Mult.", rarity: "epic", icon: "🤏" },
   { id: "spectrum_boost", name: "Prisma Roto", desc: "Espectro otorga x3 Mult adicional.", rarity: "epic", icon: "🌈" },
@@ -388,8 +389,8 @@ const RELIC_POOL: Relic[] = [
 /* ---------------- Cartas especiales para tienda ---------------- */
 const SPECIAL_DEFS: ShopSpecial[] = [
   { kind: "bonus", name: "Tinta Brillante", desc: "Da +30 fichas planas a una carta.", price: 4, rarity: "common", icon: "✨" },
-  { kind: "glass", name: "Cristal Frágil", desc: "Carta x2 puntos, 25% de romperse al jugarla.", price: 5, rarity: "rare", icon: "🔮" },
-  { kind: "steel", name: "Núcleo de Acero", desc: "Mientras esté en mano sin jugar: +1.5 Mult.", price: 6, rarity: "rare", icon: "⚙️" },
+  { kind: "glass", name: "Cristal Frágil", desc: "Carta x2 puntos, 25% de romperse al jugarla.", price: 6, rarity: "rare", icon: "🔮" },
+  { kind: "steel", name: "Núcleo de Acero", desc: "Mientras esté en mano sin jugar: +1.5 Mult.", price: 7, rarity: "rare", icon: "⚙️" },
   { kind: "gold", name: "Lámina de Oro", desc: "Si está en mano al fin de ronda: +3$.", price: 5, rarity: "rare", icon: "🪙" },
   { kind: "suitconv", name: "Tintura de Palo", desc: "Convierte el palo de una carta al que elijas.", price: 4, rarity: "common", icon: "🎨" },
 ];
@@ -957,9 +958,9 @@ function PlayScreen({
     if (g.scoreThisRound >= g.target) {
       let endMoney = g.money;
       const has = (id: string) => g.relics.some((r) => r.id === id);
-      let cashOut = 3 + g.handsLeft;
+      let cashOut = roundClearBaseReward(g.handsLeft);
       if (has("discard_refund")) cashOut += g.discardsLeft * 2;
-      if (has("interest")) cashOut += Math.min(6, Math.floor(endMoney / 5));
+      if (has("interest")) cashOut += computeInterest(endMoney);
       const goldHeld = g.hand.filter((c) => c.gold).length;
       cashOut += goldHeld * 3;
       if (has("overflow") && g.scoreThisRound >= g.target * 2) cashOut += 8;
@@ -1372,7 +1373,7 @@ function RewardScreen({
         onClick={onSkip}
         className="rc-btn rc-btn-flat mt-6 px-5 py-2 text-sm"
       >
-        Saltar (+4$)
+        Saltar (+{DECLINE_RELIC_COMPENSATION}$)
       </button>
     </div>
   );
@@ -1436,17 +1437,9 @@ function ShopScreen({
     const owned = new Set(gs.relics.map((r) => r.id));
     const weights = SHOP_WEIGHTS[phaseForRound(gs.round)];
     const relics = pickRelics(rng, RELIC_POOL, owned, SHOP_RELIC_COUNT, weights);
-    const priceOf = (rar: Rarity) =>
-      rar === "legendary"
-        ? 14
-        : rar === "epic"
-        ? 10
-        : rar === "rare"
-        ? 7
-        : 5;
     const specials = shuffle(rng, SPECIAL_DEFS).slice(0, 3);
     return {
-      relics: relics.map((r) => ({ relic: r, price: priceOf(r.rarity) })),
+      relics: relics.map((r) => ({ relic: r, price: relicPrice(r.rarity) })),
       specials,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2006,7 +1999,7 @@ export default function App() {
   };
   const handleSkipReward = () => {
     if (!gs) return;
-    advanceToNextRound({ ...gs, money: gs.money + 4 });
+    advanceToNextRound({ ...gs, money: gs.money + DECLINE_RELIC_COMPENSATION });
   };
 
   const handleMoneyRewardContinue = () => {

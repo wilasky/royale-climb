@@ -5,6 +5,7 @@
    dispersa por los componentes. Cambiar el juego = cambiar estos
    números, no buscar por todo App.tsx.
    ============================================================ */
+import type { Rarity } from "./types";
 
 /** Duración de una partida "Nueva partida" (no endless). */
 export const ROUNDS_PER_RUN = 9;
@@ -105,3 +106,32 @@ export const MONEY_REWARD_BY_PHASE: Record<RewardPhase, number> = {
   2: 9,
   3: 12,
 };
+
+/**
+ * Economía — Iteración 2B (docs/BALANCE_ITERATION_2B.md, sección 4).
+ * El cobro automático por ronda superada era el mayor contribuyente al
+ * excedente de dinero observado en el playtest, independientemente de
+ * cualquier modificador; se aprieta junto con el resto de la economía.
+ */
+export const ROUND_CLEAR_BASE = 2;
+export const ROUND_CLEAR_HANDS_BONUS_CAP = 2;
+
+/** Banca Privada (interest): 1$ por cada N$ tenidos, con tope por ronda. */
+export const INTEREST_DIVISOR = 6;
+export const INTEREST_CAP = 4;
+
+/** Precio de un modificador en tienda según su rareza. */
+export const RELIC_PRICE_BY_RARITY: Record<Rarity, number> = {
+  common: 5,
+  rare: 8,
+  epic: 12,
+  legendary: 18,
+};
+
+/**
+ * Compensación fija por rechazar la recompensa de modificador ("Saltar").
+ * Claramente inferior al valor de un buen modificador y no escala con la
+ * rareza rechazada, para que "saltar y comprar" no se vuelva la estrategia
+ * sistemáticamente correcta.
+ */
+export const DECLINE_RELIC_COMPENSATION = 3;
