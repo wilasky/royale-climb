@@ -62,13 +62,57 @@ export interface BossDefinition {
 }
 
 /**
+ * Ante 1 — El Espejo Inestable (docs/BOSS_DESIGN_2D.md, sección 2).
+ * Repetir el mismo tipo de mano dos veces seguidas dentro de la ronda
+ * penaliza el multiplicador de la repetición en ×0.75. Nunca llega a 0
+ * ni desactiva ningún tipo de mano — solo empuja a variar.
+ */
+const UNSTABLE_MIRROR: BossDefinition = {
+  id: "unstable_mirror",
+  name: "El Espejo Inestable",
+  ante: 1,
+  shortDescription: "Repetir el mismo tipo de mano dos veces seguidas: ×0.75 Mult.",
+  description:
+    "Si juegas el mismo tipo de mano dos veces seguidas en esta ronda, la " +
+    "segunda vez su multiplicador se reduce a ×0.75. Cambia de tipo de " +
+    "mano (o acepta el descuento) para evitarlo.",
+  initialState: () => ({ lastHandName: null as string | null }),
+  modifyScore: (breakdown, _ctx, state) => {
+    const lastHandName = state.lastHandName as string | null;
+    if (lastHandName !== breakdown.handName) return breakdown;
+    const mult = Math.round(breakdown.mult * 0.75 * 10) / 10;
+    const total = Math.round(breakdown.chips * mult);
+    return {
+      ...breakdown,
+      mult,
+      total,
+      lines: [
+        ...breakdown.lines,
+        `El Espejo Inestable: ×0.75 Mult (repites ${breakdown.handName})`,
+      ],
+    };
+  },
+  afterHand: (state, _ctx, breakdown) => ({
+    ...state,
+    lastHandName: breakdown.handName,
+  }),
+  describeState: (state) => {
+    const lastHandName = state.lastHandName as string | null;
+    return lastHandName
+      ? `Última mano jugada: ${lastHandName}.`
+      : "Todavía no has jugado ninguna mano esta ronda.";
+  },
+};
+
+/**
  * Catálogo de bosses por ante. Un ante puede tener varios candidatos —
- * la selección determinista de abajo ya está preparada para eso, aunque
- * en esta iteración cada ante solo tenga uno implementado (los otros
- * quedan documentados en docs/BOSS_DESIGN_2D.md como candidatos futuros).
+ * la selección determinista de arriba ya está preparada para eso,
+ * aunque en esta iteración cada ante solo tenga uno implementado (los
+ * otros quedan documentados en docs/BOSS_DESIGN_2D.md como candidatos
+ * futuros, sin ninguna línea de código todavía).
  */
 export const BOSSES_BY_ANTE: Record<BossAnte, BossDefinition[]> = {
-  1: [],
+  1: [UNSTABLE_MIRROR],
   2: [],
   3: [],
 };
