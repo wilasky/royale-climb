@@ -30,6 +30,7 @@ import {
   advanceBossState,
   getBossById,
   describeBossState,
+  bossHandWarning,
 } from "./game/bosses";
 import {
   loadProfile,
@@ -1428,7 +1429,10 @@ function PlayScreen({
     const breakdown = scoreWithBoss(played, held, gs, isFirstHand, isLastHand);
     const glass = glassRisk(played, gs.relics);
     const moneyGain = diamondMoneyPreview(played, gs.relics);
-    return { breakdown, glass, moneyGain };
+    // Advertencia de penalización de boss (Iteración 2G, sección 9):
+    // reutiliza scorePlay/scoreWithBoss, no decide nada por su cuenta.
+    const bossWarning = bossHandWarning(gs, played, held, isFirstHand, isLastHand);
+    return { breakdown, glass, moneyGain, bossWarning };
   }, [selected, gs, isFirstHand, isLastHand]);
 
   const toggle = (id: string) => {
@@ -1765,6 +1769,12 @@ function PlayScreen({
                   {preview.breakdown.total.toLocaleString()}
                 </span>
               </div>
+              {preview.bossWarning && (
+                <div className="mt-1 flex items-center gap-1.5 rounded-md border border-rose-500/40 bg-rose-950/40 px-2 py-1 text-[11px] text-rose-300">
+                  <span aria-hidden="true">⚠</span>
+                  <span>Penalización del boss: {preview.bossWarning}</span>
+                </div>
+              )}
               <ScoreBreakdownDetails breakdown={preview.breakdown} />
               {preview.glass.count > 0 && (
                 <div className="mt-1 text-[10px] text-cyan-300">
