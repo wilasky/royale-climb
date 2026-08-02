@@ -155,3 +155,16 @@ export const REWARD_REROLL_MAX = 3;
  */
 export const SHOP_REROLL_COSTS = [3, 5, 7];
 export const SHOP_REROLL_MAX = 4;
+
+/**
+ * Sesgo suave hacia la build actual al generar ofertas de modificador
+ * — Iteración 2C, sección 5. `SYNERGY_MIN_AFFINITY` es el número de
+ * piezas del mismo arquetipo que el jugador debe tener ya para que se
+ * active el sesgo; `SYNERGY_BONUS` es el incremento multiplicativo de
+ * peso (no de probabilidad directa) aplicado a los candidatos
+ * relacionados con el arquetipo dominante. Se aplica sobre los pesos
+ * de rareza existentes, nunca los sustituye (ver src/game/offers.ts):
+ * un legendario relacionado en fase 1 sigue teniendo peso 0.
+ */
+export const SYNERGY_MIN_AFFINITY = 2;
+export const SYNERGY_BONUS = 0.3;

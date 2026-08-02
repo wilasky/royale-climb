@@ -23,7 +23,7 @@ import {
 } from "./game/progression";
 import { phaseForRound } from "./game/progression";
 import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, SHOP_SPECIAL_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION, REWARD_REROLL_COSTS, REWARD_REROLL_MAX, SHOP_REROLL_COSTS, SHOP_REROLL_MAX } from "./game/config";
-import { pickRelics, pickRelicsAvoidingRepeat } from "./game/rewards";
+import { pickRelicOffer } from "./game/offers";
 import { rerollCost, canReroll } from "./game/rerolls";
 import { hasRelicCapacity, replaceRelic } from "./game/relics";
 import { roundClearBaseReward, computeInterest, relicPrice } from "./game/economy";
@@ -1327,7 +1327,7 @@ function RewardScreen({
   const [offers, setOffers] = useState<Relic[]>(() => {
     const owned = new Set(gs.relics.map((r) => r.id));
     const weights = REWARD_WEIGHTS[phaseForRound(gs.round)];
-    return pickRelics(rng, RELIC_POOL, owned, REWARD_OFFER_COUNT, weights);
+    return pickRelicOffer(rng, RELIC_POOL, owned, REWARD_OFFER_COUNT, weights, gs.relics);
   });
   const [rerollCount, setRerollCount] = useState(0);
 
@@ -1346,12 +1346,13 @@ function RewardScreen({
     const weights = REWARD_WEIGHTS[phaseForRound(gs.round)];
     const previousIds = new Set(offers.map((r) => r.id));
     setOffers(
-      pickRelicsAvoidingRepeat(
+      pickRelicOffer(
         rng,
         RELIC_POOL,
         owned,
         REWARD_OFFER_COUNT,
         weights,
+        gs.relics,
         previousIds
       )
     );
@@ -1487,7 +1488,14 @@ function ShopScreen({
   const generateStock = (excludeSpecialKinds: Set<SpecialCardKind>) => {
     const owned = new Set(gs.relics.map((r) => r.id));
     const weights = SHOP_WEIGHTS[phaseForRound(gs.round)];
-    const relics = pickRelics(rng, RELIC_POOL, owned, SHOP_RELIC_COUNT, weights);
+    const relics = pickRelicOffer(
+      rng,
+      RELIC_POOL,
+      owned,
+      SHOP_RELIC_COUNT,
+      weights,
+      gs.relics
+    );
     const availableSpecials = SPECIAL_DEFS.filter(
       (sp) => !excludeSpecialKinds.has(sp.kind)
     );

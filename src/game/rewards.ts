@@ -13,6 +13,13 @@ import type { Rng } from "./rng";
  * Muestreo sin reemplazo: tras cada elección se recalculan los pesos
  * sobre lo que queda, para no favorecer artificialmente al final.
  *
+ * `weightMultiplier` opcional (Iteración 2C, sección 5): multiplica el
+ * peso de rareza de cada candidato antes de tirar. Se aplica SOBRE el
+ * peso de rareza, nunca lo sustituye — un candidato con peso 0 en esta
+ * fase (p.ej. legendario en fase 1) sigue teniendo peso 0 sin importar
+ * el multiplicador, así el sesgo de sinergia nunca salta las
+ * restricciones de fase.
+ *
  * Determinista: para la misma secuencia de `rng()` y el mismo estado
  * de entrada, siempre devuelve el mismo resultado.
  */
@@ -21,16 +28,16 @@ export function pickRelics(
   pool: Relic[],
   ownedIds: ReadonlySet<string>,
   count: number,
-  weights: RarityWeights
+  weights: RarityWeights,
+  weightMultiplier?: (relic: Relic) => number
 ): Relic[] {
   const remaining = pool.filter((r) => !ownedIds.has(r.id));
   const picks: Relic[] = [];
+  const effectiveWeight = (r: Relic) =>
+    (weights[r.rarity] ?? 0) * (weightMultiplier ? weightMultiplier(r) : 1);
 
   while (picks.length < count && remaining.length > 0) {
-    const totalWeight = remaining.reduce(
-      (sum, r) => sum + (weights[r.rarity] ?? 0),
-      0
-    );
+    const totalWeight = remaining.reduce((sum, r) => sum + effectiveWeight(r), 0);
 
     let index: number;
     if (totalWeight <= 0) {
@@ -42,7 +49,7 @@ export function pickRelics(
       let roll = rng() * totalWeight;
       index = remaining.length - 1;
       for (let i = 0; i < remaining.length; i++) {
-        roll -= weights[remaining[i].rarity] ?? 0;
+        roll -= effectiveWeight(remaining[i]);
         if (roll <= 0) {
           index = i;
           break;
@@ -73,9 +80,10 @@ export function pickRelicsAvoidingRepeat(
   ownedIds: ReadonlySet<string>,
   count: number,
   weights: RarityWeights,
-  avoidExactMatch?: ReadonlySet<string>
+  avoidExactMatch?: ReadonlySet<string>,
+  weightMultiplier?: (relic: Relic) => number
 ): Relic[] {
-  let picks = pickRelics(rng, pool, ownedIds, count, weights);
+  let picks = pickRelics(rng, pool, ownedIds, count, weights, weightMultiplier);
 
   if (
     avoidExactMatch &&
@@ -85,7 +93,7 @@ export function pickRelicsAvoidingRepeat(
   ) {
     const remainingCandidates = pool.filter((r) => !ownedIds.has(r.id));
     if (remainingCandidates.length > count) {
-      picks = pickRelics(rng, pool, ownedIds, count, weights);
+      picks = pickRelics(rng, pool, ownedIds, count, weights, weightMultiplier);
     }
   }
 
