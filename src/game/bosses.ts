@@ -105,6 +105,55 @@ const UNSTABLE_MIRROR: BossDefinition = {
 };
 
 /**
+ * Ante 2 — El Contable Implacable (docs/BOSS_DESIGN_2D.md, sección 2).
+ * Cada mano debe superar en puntuación total a la mano anterior de la
+ * ronda; si no lo consigue, sus fichas se reducen a la mitad antes de
+ * multiplicar (el multiplicador no se toca). La primera mano de la
+ * ronda nunca se penaliza. Presiona el ORDEN en el que se juegan las
+ * manos, no qué tipo de mano se juega.
+ */
+const THE_ACCOUNTANT: BossDefinition = {
+  id: "the_accountant",
+  name: "El Contable Implacable",
+  ante: 2,
+  shortDescription:
+    "Cada mano debe superar en puntos a la anterior o sus fichas se reducen a la mitad.",
+  description:
+    "El Contable solo acepta cifras crecientes: si una mano no supera en " +
+    "puntuación total a la mano anterior de esta ronda, sus fichas se " +
+    "reducen a la mitad antes de multiplicar. Reserva tus mejores combos " +
+    "para el final.",
+  initialState: () => ({ previousTotal: null as number | null }),
+  modifyScore: (breakdown, _ctx, state) => {
+    const previousTotal = state.previousTotal as number | null;
+    if (previousTotal === null || breakdown.total > previousTotal) {
+      return breakdown;
+    }
+    const chips = Math.round(breakdown.chips * 0.5);
+    const total = Math.round(chips * breakdown.mult);
+    return {
+      ...breakdown,
+      chips,
+      total,
+      lines: [
+        ...breakdown.lines,
+        `El Contable Implacable: fichas a la mitad (no superaste ${previousTotal} puntos)`,
+      ],
+    };
+  },
+  afterHand: (state, _ctx, breakdown) => ({
+    ...state,
+    previousTotal: breakdown.total,
+  }),
+  describeState: (state) => {
+    const previousTotal = state.previousTotal as number | null;
+    return previousTotal === null
+      ? "Primera mano: todavía no hay listón que superar."
+      : `Debes superar: ${previousTotal.toLocaleString()} puntos.`;
+  },
+};
+
+/**
  * Catálogo de bosses por ante. Un ante puede tener varios candidatos —
  * la selección determinista de arriba ya está preparada para eso,
  * aunque en esta iteración cada ante solo tenga uno implementado (los
@@ -113,7 +162,7 @@ const UNSTABLE_MIRROR: BossDefinition = {
  */
 export const BOSSES_BY_ANTE: Record<BossAnte, BossDefinition[]> = {
   1: [UNSTABLE_MIRROR],
-  2: [],
+  2: [THE_ACCOUNTANT],
   3: [],
 };
 
