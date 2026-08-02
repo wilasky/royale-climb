@@ -39,6 +39,8 @@ import {
   markLastCoronationEndless,
   defaultProfile,
   buildPlayerStats,
+  exportProfileJson,
+  importProfileJson,
 } from "./game/profile";
 import type { PlayerProfile } from "./game/profile";
 import { buildCoronationRecord } from "./game/coronation";
@@ -690,6 +692,8 @@ function MenuScreen({
   runSaveState,
   onContinue,
   onDeleteCorruptSave,
+  profile,
+  onImportProfile,
 }: {
   onStart: (
     seed: number,
@@ -704,12 +708,20 @@ function MenuScreen({
   runSaveState: LoadRunSaveResult;
   onContinue: () => void;
   onDeleteCorruptSave: () => void;
+  /** Export/import manual de perfil — sección 11. */
+  profile: PlayerProfile;
+  onImportProfile: (profile: PlayerProfile) => void;
 }) {
   const [seedInput, setSeedInput] = useState("");
   const [showHelp, setShowHelp] = useState(false);
   const [oathOn, setOathOn] = useState(false);
   const [variantOn, setVariantOn] = useState(false);
   const [corruptDismissed, setCorruptDismissed] = useState(false);
+  const [showProfileTools, setShowProfileTools] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [pendingImportProfile, setPendingImportProfile] =
+    useState<PlayerProfile | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // Pulsar "Nueva partida"/"Endless"/"Jugar" con una run guardada exige
   // confirmación antes de reemplazarla (sección 3) — `pendingStart`
   // guarda la acción real hasta que el jugador confirma o cancela.
@@ -725,6 +737,42 @@ function MenuScreen({
   const requestStart = (action: () => void) => {
     if (hasActiveSave) setPendingStart(() => action);
     else action();
+  };
+
+  // Exportar perfil como archivo JSON — sección 11. Sin servidor, sin
+  // cloud sync: descarga local vía Blob, igual que cualquier "backup"
+  // de una app de escritorio.
+  const handleExportProfile = () => {
+    const json = exportProfileJson(profile);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "royale-climb-perfil.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Importar: lee el archivo, VALIDA (importProfileJson nunca ejecuta
+  // el contenido, solo lo parsea como datos) y deja el resultado en
+  // pendingImportProfile para pedir confirmación antes de sobrescribir
+  // — nunca se aplica directamente aquí.
+  const handleFileChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = importProfileJson(String(reader.result ?? ""));
+      if (result.status === "error") {
+        setImportError(result.message);
+        setPendingImportProfile(null);
+      } else {
+        setImportError(null);
+        setPendingImportProfile(result.profile);
+      }
+    };
+    reader.readAsText(file);
   };
 
   // Save corrupto (sección 6): se muestra en vez del menú normal hasta
@@ -888,6 +936,47 @@ function MenuScreen({
             </span>
           </label>
         )}
+
+        {/* Export/import manual de perfil — sección 11 (docs/PERSISTENCE_2F.md).
+            Sin servidor, sin cloud sync: backup local y punto. */}
+        <button
+          onClick={() => setShowProfileTools((s) => !s)}
+          className="mt-2 text-xs text-slate-500 underline decoration-dotted hover:text-slate-300"
+        >
+          {showProfileTools ? "▲ Ocultar perfil" : "▼ Copia de seguridad del perfil"}
+        </button>
+        {showProfileTools && (
+          <div className="rc-panel flex flex-col gap-2 p-3 text-left text-xs text-slate-400">
+            <p>
+              Exporta tu progresión a un archivo, o impórtala en otro
+              navegador/dispositivo.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleExportProfile}
+                className="rc-btn rc-btn-flat px-3 py-2 text-xs"
+              >
+                Exportar perfil
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="rc-btn rc-btn-flat px-3 py-2 text-xs"
+              >
+                Importar perfil
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json"
+                onChange={handleFileChosen}
+                className="hidden"
+              />
+            </div>
+            {importError && (
+              <p className="text-rose-300">{importError}</p>
+            )}
+          </div>
+        )}
       </div>
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
@@ -912,6 +1001,39 @@ function MenuScreen({
               </button>
               <button
                 onClick={() => setPendingStart(null)}
+                className="rc-btn rc-btn-flat px-4 py-2 text-sm"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingImportProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,7,20,0.92)] p-4 backdrop-blur-sm">
+          <div className="rc-panel rc-panel__corners w-full max-w-sm p-5 text-center">
+            <p className="mb-2 text-sm text-slate-300">
+              Vas a reemplazar tu perfil actual ({profile.runsWon} coronaciones,{" "}
+              {profile.runsStarted} runs) por el importado (
+              {pendingImportProfile.runsWon} coronaciones,{" "}
+              {pendingImportProfile.runsStarted} runs).
+            </p>
+            <p className="mb-4 text-xs text-rose-300">
+              Esta acción no se puede deshacer.
+            </p>
+            <div className="flex justify-center gap-3">
+              <button
+                onClick={() => {
+                  onImportProfile(pendingImportProfile);
+                  setPendingImportProfile(null);
+                }}
+                className="rc-btn rc-btn-primary px-4 py-2 text-sm"
+              >
+                Sí, importar
+              </button>
+              <button
+                onClick={() => setPendingImportProfile(null)}
                 className="rc-btn rc-btn-flat px-4 py-2 text-sm"
               >
                 Cancelar
@@ -3076,6 +3198,12 @@ export default function App() {
     setRunSaveState({ status: "none" });
   };
 
+  /** Aplica un perfil importado ya validado y confirmado por el jugador (sección 11). */
+  const handleImportProfile = (imported: PlayerProfile) => {
+    setProfile(imported);
+    saveProfile(imported);
+  };
+
   return (
     <div className="rc-arena relative min-h-screen w-full text-slate-100 antialiased">
       <style>{`
@@ -3160,6 +3288,8 @@ export default function App() {
             runSaveState={runSaveState}
             onContinue={handleContinueRun}
             onDeleteCorruptSave={handleDeleteCorruptSave}
+            profile={profile}
+            onImportProfile={handleImportProfile}
           />
         )}
 

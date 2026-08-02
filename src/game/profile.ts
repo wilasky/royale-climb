@@ -356,3 +356,61 @@ export function buildPlayerStats(profile: PlayerProfile): PlayerStats {
     favoriteBuild,
   };
 }
+
+/* ---------------- Export / import manual ---------------- */
+
+/**
+ * Exporta el perfil como texto JSON — sección 11. Pensado para
+ * backup, mover progresión entre navegadores y una futura migración
+ * a Android; nunca incluye nada más que lo que ya vive en
+ * `PlayerProfile` (sin datos sensibles, sin credenciales, sin nada
+ * ajeno al propio progreso de juego).
+ */
+export function exportProfileJson(profile: PlayerProfile): string {
+  return JSON.stringify(profile, null, 2);
+}
+
+export type ImportProfileResult =
+  | { status: "ok"; profile: PlayerProfile }
+  | { status: "error"; message: string };
+
+/**
+ * Importa un perfil desde texto JSON — sección 11. Nunca ejecuta el
+ * contenido (solo `JSON.parse`) y nunca confía en él a ciegas: además
+ * de comprobar la versión explícitamente (a diferencia de la carga
+ * normal vía `migrateProfile`, que rellena con valores por defecto en
+ * silencio, importar una versión distinta a `PROFILE_VERSION` se
+ * rechaza con un error legible en vez de aceptarla como si fuera
+ * compatible), el resultado pasa por la misma validación campo a
+ * campo que `migrateProfile` antes de devolverse. No sobrescribe nada
+ * por sí mismo — quien llama decide si aplicar el resultado (y
+ * `App.tsx` pide confirmación antes de hacerlo).
+ */
+export function importProfileJson(raw: string): ImportProfileResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { status: "error", message: "El archivo no contiene JSON válido." };
+  }
+  if (!looksLikeProfile(parsed)) {
+    return {
+      status: "error",
+      message: "El archivo no tiene el formato de un perfil de Royale Climb.",
+    };
+  }
+  const version = parsed.version;
+  if (typeof version !== "number") {
+    return {
+      status: "error",
+      message: "El archivo no indica una versión de perfil válida.",
+    };
+  }
+  if (version !== PROFILE_VERSION) {
+    return {
+      status: "error",
+      message: `Este perfil es de una versión incompatible (v${version}, se esperaba v${PROFILE_VERSION}).`,
+    };
+  }
+  return { status: "ok", profile: migrateProfile(parsed) };
+}

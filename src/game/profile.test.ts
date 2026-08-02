@@ -9,6 +9,8 @@ import {
   recordRunEnd,
   buildPlayerStats,
   markLastCoronationEndless,
+  exportProfileJson,
+  importProfileJson,
   PROFILE_VERSION,
   PROFILE_STORAGE_KEY,
 } from "./profile";
@@ -361,5 +363,74 @@ describe("buildPlayerStats", () => {
     const before = structuredClone(p);
     buildPlayerStats(p);
     expect(p).toEqual(before);
+  });
+});
+
+describe("exportProfileJson / importProfileJson (docs/PERSISTENCE_2F.md, sección 11)", () => {
+  it("exportar y volver a importar reproduce el mismo perfil (round-trip)", () => {
+    let p = recordRunStart(defaultProfile());
+    p = recordCoronation(p, record(), 9, 500);
+    p = recordRunEnd(p, summary({ won: true, reachedRound: 9, totalScore: 1000, bestHand: 500 }));
+
+    const json = exportProfileJson(p);
+    const result = importProfileJson(json);
+
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.profile).toEqual(p);
+    }
+  });
+
+  it("exportar produce JSON válido y legible por JSON.parse", () => {
+    const json = exportProfileJson(defaultProfile());
+    expect(() => JSON.parse(json)).not.toThrow();
+  });
+
+  it("importar JSON inválido devuelve un error legible, nunca lanza", () => {
+    const result = importProfileJson("{esto no es json");
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.message).toMatch(/JSON/i);
+    }
+  });
+
+  it("importar algo con forma incorrecta (array) devuelve un error legible", () => {
+    const result = importProfileJson(JSON.stringify([1, 2, 3]));
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.message.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("importar sin campo version devuelve un error legible", () => {
+    const raw = { ...defaultProfile() } as Record<string, unknown>;
+    delete raw.version;
+    const result = importProfileJson(JSON.stringify(raw));
+    expect(result.status).toBe("error");
+  });
+
+  it("importar una versión incompatible se rechaza explícitamente (no se trunca en silencio)", () => {
+    const raw = { ...defaultProfile(), version: 999 };
+    const result = importProfileJson(JSON.stringify(raw));
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.message).toMatch(/versión/i);
+    }
+  });
+
+  it("importar la versión actual con campos corruptos los recupera igual que migrateProfile", () => {
+    const raw = { ...defaultProfile(), runsStarted: "no-es-un-numero" };
+    const result = importProfileJson(JSON.stringify(raw));
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.profile.runsStarted).toBe(0);
+    }
+  });
+
+  it("nunca ejecuta el contenido — un payload con código no se interpreta, solo se parsea como datos", () => {
+    const malicious = '{"version":1,"runsStarted":"__proto__"}';
+    expect(() => importProfileJson(malicious)).not.toThrow();
+    const result = importProfileJson(malicious);
+    expect(result.status).toBe("ok");
   });
 });
