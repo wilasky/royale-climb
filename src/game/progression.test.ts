@@ -107,7 +107,7 @@ describe("ante y fase de rareza", () => {
 
 describe("curva de objetivo de puntuación", () => {
   it("coincide con los valores documentados para las rondas 1-9", () => {
-    const expected = [200, 310, 481, 745, 1154, 1789, 2773, 4299, 6663];
+    const expected = [180, 280, 450, 700, 1050, 1900, 3200, 5200, 8500];
     expected.forEach((value, i) => {
       expect(targetForRound(i + 1)).toBe(value);
     });

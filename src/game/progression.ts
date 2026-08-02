@@ -7,14 +7,24 @@ import {
   ROUNDS_PER_RUN,
   ROUNDS_PER_ANTE,
   SHOP_EVERY_N_ROUNDS,
-  TARGET_BASE,
-  TARGET_GROWTH,
+  ROUND_TARGETS,
+  ENDLESS_TARGET_GROWTH,
 } from "./config";
 import type { RewardPhase } from "./config";
 
-/** Objetivo de puntuación de una ronda. Fórmula sin cambios (ver config.ts). */
+/**
+ * Objetivo de puntuación de una ronda — Iteración 2B
+ * (docs/BALANCE_ITERATION_2B.md, sección 5). Rondas 1-9 salen de la tabla
+ * explícita `ROUND_TARGETS`; más allá (Endless) continúa desde el objetivo
+ * de la ronda 9 con crecimiento geométrico moderado.
+ */
 export function targetForRound(round: number): number {
-  return Math.round(TARGET_BASE * Math.pow(TARGET_GROWTH, round - 1));
+  const explicit = ROUND_TARGETS[round];
+  if (explicit !== undefined) return explicit;
+  return Math.round(
+    ROUND_TARGETS[ROUNDS_PER_RUN] *
+      Math.pow(ENDLESS_TARGET_GROWTH, round - ROUNDS_PER_RUN)
+  );
 }
 
 /** Ante al que pertenece una ronda (3 rondas por ante, sin tope). */

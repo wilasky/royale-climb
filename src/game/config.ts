@@ -1,8 +1,9 @@
 /* ============================================================
-   Configuración de progresión — Iteración 2A (docs/GAME_AUDIT.md, P0-1/P0-2).
-   Toda constante de flujo/curva/rareza vive aquí en vez de dispersa
-   por los componentes. Cambiar el juego = cambiar estos números,
-   no buscar por todo App.tsx.
+   Configuración de progresión — Iteración 2A (docs/GAME_AUDIT.md, P0-1/P0-2)
+   y balance de la Iteración 2B (docs/BALANCE_ITERATION_2B.md).
+   Toda constante de flujo/curva/rareza/economía vive aquí en vez de
+   dispersa por los componentes. Cambiar el juego = cambiar estos
+   números, no buscar por todo App.tsx.
    ============================================================ */
 
 /** Duración de una partida "Nueva partida" (no endless). */
@@ -21,15 +22,30 @@ export const DISCARDS_PER_ROUND = 3;
 export const HAND_SIZE = 8;
 
 /**
- * Curva de objetivo de puntuación. SIN CAMBIOS respecto a la fórmula
- * original (`200 * 1.55^(ronda-1)`) — el audit no propuso una curva
- * alternativa concreta, así que la opción que menos modifica el
- * balance actual es mantener esta fórmula exacta y solo centralizarla.
- * Ver docs/CHANGELOG_GAMEPLAY.md para los valores exactos de las
- * rondas 1-9 (y algunas de referencia en modo Endless más allá de la 9).
+ * Curva de objetivo de puntuación — Iteración 2B (docs/BALANCE_ITERATION_2B.md,
+ * sección 5). Sustituye la fórmula exponencial genérica de la 2A por una
+ * tabla explícita ronda a ronda, calibrada contra el poder real de una
+ * build con el nuevo tope de `MAX_ACTIVE_RELICS` y la economía ajustada
+ * (ver docs/BALANCE_ITERATION_2B.md para el razonamiento por ronda).
  */
-export const TARGET_BASE = 200;
-export const TARGET_GROWTH = 1.55;
+export const ROUND_TARGETS: Record<number, number> = {
+  1: 180,
+  2: 280,
+  3: 450,
+  4: 700,
+  5: 1050,
+  6: 1900,
+  7: 3200,
+  8: 5200,
+  9: 8500,
+};
+
+/**
+ * Endless (rondas 10+) continúa desde el objetivo de la ronda 9 con
+ * crecimiento geométrico moderado, en vez de reutilizar la vieja fórmula
+ * exponencial genérica. Ver `targetForRound` en progression.ts.
+ */
+export const ENDLESS_TARGET_GROWTH = 1.6;
 
 /** Cuántas opciones se ofrecen en cada punto de elección. */
 export const REWARD_OFFER_COUNT = 3;
