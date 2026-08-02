@@ -436,3 +436,116 @@ Ver `docs/BUILD_AGENCY_ITERATION_2C.md` secciones 12-13 — el sesgo de
 sinergia y los costes de reroll/banish no se han validado contra una run
 completa jugada de principio a fin ni contra un playtest humano; quedan
 como hipótesis documentadas para el próximo playtest.
+
+# Changelog de gameplay — Iteración 2D
+
+Objetivo: variedad de encuentros, no rebalance de números. Explícitamente
+NO se tocaron objetivos de ronda, economía, precios, costes de
+reroll/banish, rarezas, sesgo de sinergia, valores numéricos de
+modificadores existentes, el límite de 6 modificadores ni las
+recompensas económicas de la 2B/2C.
+
+## 1. Estructura de Antes
+
+`src/game/progression.ts`: `isBossRound(round, endless)` e
+`isFinalBossRound(round, endless)`, junto a las ya existentes
+`anteOfRound`/`isShopRound`/`isNormalRunComplete`. `isBossRound` coincide
+aritméticamente con `isShopRound` (rondas 3, 6, 9...) pero se expone con
+su propio nombre por ser una pregunta distinta ("¿toca boss?"). Ambas
+devuelven siempre `false` en Endless — Endless sigue sin bosses, con su
+mismo sistema de siempre. Ningún `round === 3 || round === 6` disperso
+por `App.tsx`: todo el código de UI/flujo consulta estas dos funciones.
+
+## 2. Sistema de bosses
+
+Nuevo `src/game/bosses.ts`. `BossDefinition` declarativa (id, name, ante,
+shortDescription, description, `initialState()`, `modifyScore?`,
+`afterHand?`, `describeState?`) agrupada en
+`BOSSES_BY_ANTE: Record<1|2|3, BossDefinition[]>` — un array por ante para
+poder añadir más candidatos en el futuro sin cambiar la forma de la
+selección. `selectBossForAnte(seed, ante)` es determinista (RNG propio,
+`seed + ante * 97711`, aislado de reward/shop/shuffle RNG): misma seed +
+mismo ante siempre da el mismo boss. `GameState` gana `activeBossId` y
+`bossState` (Iteración 2D); se recalculan en cada `startRound` y nunca
+persisten entre rondas.
+
+## 3. Filosofía y los 6 bosses diseñados
+
+`docs/BOSS_DESIGN_2D.md` documenta los 6 conceptos (2 por ante) antes de
+implementar nada, con temática, regla, decisión nueva que crea, builds
+afectadas, por qué no es un hard counter, exploits conocidos, dificultad
+estimada y complejidad técnica de cada uno. Ninguno desactiva un tipo de
+mano, un palo o una categoría de modificador — todos cambian una decisión
+táctica (qué jugar, en qué orden, cuándo arriesgar) sin que ninguna build
+quede sin salida.
+
+## 4. Los 3 bosses implementados (uno por ante)
+
+- **Ante 1 — El Espejo Inestable** (`unstable_mirror`): repetir el mismo
+  tipo de mano dos veces seguidas en la ronda reduce el Mult de la
+  repetición a ×0.75. Empuja a variar el tipo de mano jugada; nunca
+  bloquea ninguna.
+- **Ante 2 — El Contable Implacable** (`the_accountant`): cada mano debe
+  superar en puntuación total a la mano anterior de la ronda, o sus
+  fichas se reducen a la mitad (el Mult no se toca). Presiona el orden en
+  que se juegan las manos, no qué se juega. La primera mano de la ronda
+  nunca se penaliza.
+- **Ante 3 (final) — El Trono Partido** (`split_throne`): boss de dos
+  fases. Hasta cruzar el 50% del objetivo, reglas normales; la mano que
+  cruza el umbral puntúa todavía en Fase 1 (sin penalización
+  retroactiva). A partir de la siguiente mano, cada una suma +40 fichas
+  planas pero su Mult baja a ×0.7 durante el resto de la ronda.
+
+Los otros 3 conceptos (El Apostador Ciego, El Eco del Trono, El Heraldo
+Inverso) quedan documentados en `docs/BOSS_DESIGN_2D.md` como candidatos
+futuros, sin ninguna línea de código.
+
+## 5. Hooks usados
+
+Solo los que los 3 bosses necesitan: `initialState`, `modifyScore`,
+`afterHand`, más `describeState` (opcional, solo UI). Sin `beforeRound`,
+`afterDiscard` ni `afterRound` — no aportarían nada a estos 3 bosses y se
+evita un framework sobredimensionado. `scoreWithBoss` envuelve
+`scorePlay` sin tocarlo: si no hay boss activo o el boss no define
+`modifyScore`, el resultado es idéntico al de `scorePlay`. Tanto la
+previsualización de `PlayScreen` como `playHand()` llaman a la misma
+`scoreWithBoss` con los mismos argumentos — se mantiene la paridad
+preview/ejecución real establecida desde la 2A (P0-3).
+
+## 6. UI mínima (telegraph y boss activo)
+
+Sin arte nuevo — solo texto y las clases CSS ya existentes (`rc-panel`,
+`rc-eyebrow`, etc.). En `PlayScreen`, un panel entre la etiqueta de build
+y "Objetivo de ronda": en rondas sin boss (fuera de Endless) muestra
+"Próximo boss del ante" vía `selectBossForAnte(gs.seed, gs.ante)` — el
+telegraph pedido en las 3 fases sale gratis de que `gs.ante` cambia solo
+al empezar cada ante. En la ronda de boss, el mismo hueco muestra "BOSS",
+el nombre, la descripción completa de la regla y `describeBossState(gs)`
+si el boss expone estado (última mano jugada, listón a superar, fase
+actual). `WinScreen` añade "Boss final derrotado: <nombre>" cuando la run
+termina con un boss final activo, sin tocar el resto de la pantalla ni el
+botón de continuar a Endless.
+
+## 7. Pruebas añadidas
+
+138 tests en 11 archivos (antes 108 en 10): nuevo `bosses.test.ts` (30
+tests) — estructura del catálogo, `getBossById`, determinismo de
+`selectBossForAnte` (misma seed+ante repetible, cualquier seed con un
+único candidato), `initBossState` por boss, la regla de cada uno de los 3
+bosses (incluida la no-penalización de la primera mano, la transición de
+fase del Trono Partido y que no muta `breakdown`/`bossState`), paridad
+preview/ejecución con boss activo, y `describeBossState` con y sin boss.
+`progression.test.ts` ganó un bloque para `isBossRound`/`isFinalBossRound`
+(rondas correctas, exclusión en Endless, que la ronda 9 sigue llevando a
+victoria). Los 108 tests de las iteraciones 2A/2B/2C siguen pasando sin
+cambios de comportamiento.
+
+## 8. Riesgos pendientes
+
+Ver `docs/BOSS_DESIGN_2D.md` sección 5 — el exploit de "sandbagging" de
+El Contable Implacable (jugar deliberadamente mal la primera mano para
+bajar el listón) queda documentado y sin mitigar en esta versión; posible
+penalización desproporcionada del Trono Partido a builds de multiplicador
+puro; posible dureza del Espejo Inestable para builds mono-arquetipo en
+ante 1. Ninguno de los 3 bosses se ha validado contra un playtest humano
+completo.

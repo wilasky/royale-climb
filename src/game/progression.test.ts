@@ -7,6 +7,8 @@ import {
   resolveRoundReward,
   resolveAfterShop,
   beginEndlessContinuation,
+  isBossRound,
+  isFinalBossRound,
 } from "./progression";
 import { ROUNDS_PER_RUN } from "./config";
 
@@ -116,6 +118,49 @@ describe("ante y fase de rareza", () => {
     expect(phaseForRound(7)).toBe(3);
     expect(phaseForRound(9)).toBe(3);
     expect(phaseForRound(20)).toBe(3);
+  });
+});
+
+describe("rondas de boss - Iteración 2D", () => {
+  it("las rondas 3, 6 y 9 son de boss en Nueva partida; las demás no", () => {
+    expect(isBossRound(3, false)).toBe(true);
+    expect(isBossRound(6, false)).toBe(true);
+    expect(isBossRound(9, false)).toBe(true);
+    for (const round of [1, 2, 4, 5, 7, 8]) {
+      expect(isBossRound(round, false)).toBe(false);
+    }
+  });
+
+  it("en Endless nunca hay boss, ni siquiera en múltiplos de 3", () => {
+    for (const round of [3, 6, 9, 12, 15]) {
+      expect(isBossRound(round, true)).toBe(false);
+    }
+  });
+
+  it("solo la ronda 9 de Nueva partida es el boss final", () => {
+    expect(isFinalBossRound(9, false)).toBe(true);
+    for (const round of [3, 6, 8, 10]) {
+      expect(isFinalBossRound(round, false)).toBe(false);
+    }
+    expect(isFinalBossRound(9, true)).toBe(false);
+  });
+
+  it("cada ronda de boss cae en el ante correcto (1, 2 y 3 respectivamente)", () => {
+    expect(anteOfRound(3)).toBe(1);
+    expect(anteOfRound(6)).toBe(2);
+    expect(anteOfRound(9)).toBe(3);
+  });
+
+  it("las rondas de boss siguen abriendo tienda al superarlas", () => {
+    for (const round of [3, 6, 9]) {
+      expect(resolveRoundReward(round, false).type).toBe(
+        round === 9 ? "victory" : "shop"
+      );
+    }
+  });
+
+  it("la ronda 9 sigue llevando a victoria (no queda atrapada como boss)", () => {
+    expect(resolveRoundReward(9, false)).toEqual({ type: "victory" });
   });
 });
 
