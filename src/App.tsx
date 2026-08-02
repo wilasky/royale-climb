@@ -32,7 +32,12 @@ import {
 } from "./game/bosses";
 import { loadProfile, saveProfile, recordRunStart } from "./game/profile";
 import type { PlayerProfile } from "./game/profile";
-import { getUnlockedBossIds } from "./game/legacies";
+import { getUnlockedBossIds, getUnlockedOathIds } from "./game/legacies";
+import {
+  getOathById,
+  shouldShowBossTelegraph,
+  OATH_I_VEIL_OF_THE_THRONE,
+} from "./game/oaths";
 import { phaseForRound } from "./game/progression";
 import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, SHOP_SPECIAL_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION, REWARD_REROLL_COSTS, REWARD_REROLL_MAX, SHOP_REROLL_COSTS, SHOP_REROLL_MAX, BANISH_MAX, BANISH_COSTS, SYNERGY_MIN_AFFINITY } from "./game/config";
 import { pickRelicOffer } from "./game/offers";
@@ -643,12 +648,17 @@ function StatBox({
 function MenuScreen({
   onStart,
   lastSeed,
+  unlockedOathIds,
 }: {
-  onStart: (seed: number, endless: boolean) => void;
+  onStart: (seed: number, endless: boolean, oathId: string | null) => void;
   lastSeed: number | null;
+  unlockedOathIds: ReadonlySet<string>;
 }) {
   const [seedInput, setSeedInput] = useState("");
   const [showHelp, setShowHelp] = useState(false);
+  const [oathOn, setOathOn] = useState(false);
+  const oathUnlocked = unlockedOathIds.has(OATH_I_VEIL_OF_THE_THRONE);
+  const chosenOathId = oathOn && oathUnlocked ? OATH_I_VEIL_OF_THE_THRONE : null;
 
   return (
     <div className="flex min-h-[80vh] flex-col items-center justify-center gap-7 px-4 text-center">
@@ -675,7 +685,7 @@ function MenuScreen({
 
       <div className="flex w-full max-w-sm flex-col gap-3">
         <button
-          onClick={() => onStart((Math.random() * 1e9) | 0, false)}
+          onClick={() => onStart((Math.random() * 1e9) | 0, false, chosenOathId)}
           className="rc-btn rc-btn-primary px-6 py-4 text-lg"
         >
           ▶  Nueva partida
@@ -687,7 +697,7 @@ function MenuScreen({
           ?  Cómo se juega
         </button>
         <button
-          onClick={() => onStart((Math.random() * 1e9) | 0, true)}
+          onClick={() => onStart((Math.random() * 1e9) | 0, true, chosenOathId)}
           className="rc-btn rc-btn-ghost--magenta px-6 py-3"
         >
           ∞  Modo Endless
@@ -706,7 +716,8 @@ function MenuScreen({
             onClick={() =>
               onStart(
                 seedInput ? parseInt(seedInput, 10) : (Math.random() * 1e9) | 0,
-                false
+                false,
+                chosenOathId
               )
             }
             className="rc-btn rc-btn-flat px-4 py-2 text-sm"
@@ -716,6 +727,24 @@ function MenuScreen({
         </div>
         {lastSeed !== null && (
           <p className="text-xs text-slate-500">Última semilla: {lastSeed}</p>
+        )}
+
+        {/* Selector mínimo de Juramento — Iteración 2E, sección 6. Solo
+            visible una vez desbloqueado el Legado correspondiente;
+            componente provisional, sin rediseño visual. */}
+        {oathUnlocked && (
+          <label className="mt-1 flex items-center gap-2 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/[0.06] px-3 py-2 text-left text-xs text-slate-300">
+            <input
+              type="checkbox"
+              checked={oathOn}
+              onChange={(e) => setOathOn(e.target.checked)}
+              className="accent-fuchsia-400"
+            />
+            <span>
+              <strong className="text-fuchsia-300">Juramento: El Velo del Trono</strong>
+              {" — "}no verás el próximo boss del ante hasta llegar a su ronda.
+            </span>
+          </label>
         )}
       </div>
 
@@ -1109,6 +1138,23 @@ function PlayScreen({
               </div>
             );
           })()
+        ) : !shouldShowBossTelegraph(gs.oathId) ? (
+          <div className="rc-panel mb-3 p-3 opacity-80">
+            <div className="mb-1 flex items-center gap-2">
+              <span
+                className="rc-eyebrow text-fuchsia-400"
+                style={{ fontSize: "0.62rem" }}
+              >
+                Juramento activo
+              </span>
+              <span className="text-sm font-semibold text-slate-200">
+                {getOathById(gs.oathId)?.name}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500">
+              No verás el próximo boss del ante hasta llegar a su ronda.
+            </p>
+          </div>
         ) : (
           (() => {
             const upcoming = selectBossForAnte(
@@ -2142,6 +2188,7 @@ export default function App() {
   // partidas perdidas, a cerrar la pestaña, a "Nueva partida".
   const [profile, setProfile] = useState<PlayerProfile>(() => loadProfile());
   const unlockedBossIds = useMemo(() => getUnlockedBossIds(profile), [profile]);
+  const unlockedOathIds = useMemo(() => getUnlockedOathIds(profile), [profile]);
   const rewardRng = useRef<Rng>(makeRng(1));
   const shopRng = useRef<Rng>(makeRng(1));
 
@@ -2202,7 +2249,7 @@ export default function App() {
     []
   );
 
-  const newGame = (seed: number, endless: boolean) => {
+  const newGame = (seed: number, endless: boolean, oathId: string | null = null) => {
     setLastSeed(seed);
     // "runs iniciadas" (docs/METAPROGRESSION_2E.md, sección 1) - se
     // cuenta aquí, gane o pierda la run después.
@@ -2235,7 +2282,7 @@ export default function App() {
       banishedRelicIds: [],
       activeBossId: null,
       bossState: {},
-      oathId: null,
+      oathId,
     };
     rewardRng.current = makeRng(seed + 555);
     shopRng.current = makeRng(seed + 999);
@@ -2471,7 +2518,11 @@ export default function App() {
         )}
 
         {screen === "menu" && (
-          <MenuScreen onStart={newGame} lastSeed={lastSeed} />
+          <MenuScreen
+            onStart={newGame}
+            lastSeed={lastSeed}
+            unlockedOathIds={unlockedOathIds}
+          />
         )}
 
         {screen === "play" && gs && (
@@ -2520,7 +2571,7 @@ export default function App() {
           <DefeatScreen
             gs={gs}
             onMenu={() => setScreen("menu")}
-            onRetry={() => newGame(gs.seed, gs.endless)}
+            onRetry={() => newGame(gs.seed, gs.endless, gs.oathId)}
           />
         )}
 
