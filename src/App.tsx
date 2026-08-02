@@ -481,8 +481,8 @@ function PlayingCard({
   small?: boolean;
   scoring?: boolean;
 }) {
-  const w = small ? 56 : 76;
-  const h = small ? 80 : 108;
+  const w = small ? 56 : 90;
+  const h = small ? 80 : 128;
   const isFace = card.rank >= 11 && card.rank <= 13;
   const isAce = card.rank === 14;
   const suitPal = SUIT_PALETTE[card.suit];
@@ -501,8 +501,8 @@ function PlayingCard({
     ? "linear-gradient(135deg, #fef3c7 0%, #fcd34d 50%, #fffbeb 100%)"
     : "linear-gradient(160deg, #fafafa 0%, #f1f5f9 60%, #e2e8f0 100%)";
 
-  const cornerPx = small ? 1 : 1.4;
-  const centerPx = small ? 2 : 3;
+  const cornerPx = small ? 1 : 1.65;
+  const centerPx = small ? 2 : 3.55;
 
   return (
     <button
@@ -548,7 +548,7 @@ function PlayingCard({
       {/* esquina superior izquierda */}
       <div className="absolute top-0.5 left-1 z-10 flex flex-col items-center leading-none">
         <span
-          className={`font-black ${small ? "text-[11px]" : "text-sm"}`}
+          className={`font-black ${small ? "text-[11px]" : "text-base"}`}
           style={{ fontFamily: "ui-monospace, monospace", color: cornerHex }}
         >
           {rankLabel(card.rank)}
@@ -565,7 +565,7 @@ function PlayingCard({
       {/* esquina inferior derecha (rotada) */}
       <div className="absolute bottom-0.5 right-1 z-10 flex rotate-180 flex-col items-center leading-none">
         <span
-          className={`font-black ${small ? "text-[11px]" : "text-sm"}`}
+          className={`font-black ${small ? "text-[11px]" : "text-base"}`}
           style={{ fontFamily: "ui-monospace, monospace", color: cornerHex }}
         >
           {rankLabel(card.rank)}
@@ -590,7 +590,7 @@ function PlayingCard({
               />
               <PixSprite
                 grid={FACE_16x20}
-                px={small ? 1.7 : 2.3}
+                px={small ? 1.7 : 2.7}
                 palette={facePalette(card.suit)}
               />
             </div>
@@ -606,7 +606,7 @@ function PlayingCard({
               />
               <PixSprite
                 grid={SUIT_SPRITE[card.suit]}
-                px={small ? 2.6 : 3.6}
+                px={small ? 2.6 : 4.25}
                 palette={suitPal}
               />
             </div>
@@ -1659,7 +1659,7 @@ function PlayScreen({
   const objectiveCleared = gs.scoreThisRound >= gs.target;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 px-3 pb-6 lg:flex-row lg:items-start">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 px-3 pb-6 lg:max-w-[1680px] lg:flex-row lg:items-start">
       {/* Panel persistente de build/modificadores (Iteración 2G, docs/GAME_FEEL_2G.md,
           secciones 1-2): reutiliza computeBuildIdentity (2C) tal cual, nunca duplica
           el cálculo de afinidad. order-2 en todos los tamaños: en pantallas
@@ -3552,7 +3552,7 @@ export default function App() {
       <div className="rc-arena__scanlines" />
       <ParticleLayer particles={particles} />
 
-      <div className="relative z-10 mx-auto w-full max-w-5xl py-4 sm:py-6">
+      <div className="relative z-10 mx-auto w-full max-w-5xl py-4 sm:py-6 lg:max-w-[1680px]">
         {screen !== "menu" && (
           <div className="mb-2 flex items-center justify-between px-3">
             <button
