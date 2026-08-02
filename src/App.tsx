@@ -1028,6 +1028,7 @@ function PlayScreen({
   spawnParticles,
   unlockedBossIds,
   onDiscard,
+  onRunEnding,
 }: {
   gs: GameState;
   setGs: (g: GameState) => void;
@@ -1037,6 +1038,8 @@ function PlayScreen({
   unlockedBossIds: ReadonlySet<string>;
   /** Estadísticas de perfil (docs/PERSISTENCE_2F.md, sección 10) — se cuenta un descarte real. */
   onDiscard: () => void;
+  /** Se llama en el instante exacto en que se detecta la derrota, antes de la animación (docs/PERSISTENCE_2F.md, sección 8). */
+  onRunEnding: () => void;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [lastScore, setLastScore] = useState<ScoreBreakdown | null>(null);
@@ -1197,6 +1200,14 @@ function PlayScreen({
     }
 
     if (g.handsLeft <= 0) {
+      // Derrota (docs/PERSISTENCE_2F.md): se borra el save AQUÍ, en el
+      // mismo instante en que se detecta, no cuando termina la
+      // animación de 700ms. Si no, un refresco durante esos 700ms
+      // restauraría una run con 0 manos restantes de la que no se
+      // podría salir (playHand no hace nada con handsLeft<=0) — borrar
+      // ya mismo hace que ese refresco caiga en el menú normal, sin
+      // save que continuar, en vez de dejar al jugador atascado.
+      onRunEnding();
       setGs(g);
       setTimeout(() => onDefeat(g), 700);
       return;
@@ -2621,6 +2632,14 @@ export default function App() {
   const [pendingLegacy, setPendingLegacy] = useState<PendingLegacySave | null>(
     null
   );
+  // Cuando una acción borra el save de forma explícita y adelantada
+  // (p.ej. detectar handsLeft<=0 en playHand, antes de que termine la
+  // animación de derrota — ver más abajo), el siguiente `gs`/`screen`
+  // que ya estaba en cola dispararía este mismo useEffect y
+  // re-escribiría el save recién borrado. Esta bandera hace que esa
+  // única escritura se salte, sin tener que acoplar el efecto a
+  // ninguna lógica de victoria/derrota.
+  const suppressNextAutosaveRef = useRef(false);
 
   // Autosave — sección 2 del encargo. Se dispara tras CUALQUIER
   // transición real (cambia `gs` o `screen`), nunca durante animaciones
@@ -2631,6 +2650,10 @@ export default function App() {
   // en "menu" o "defeat" no hay run activa que guardar.
   useEffect(() => {
     if (!gs || !isSaveableScreen(screen)) return;
+    if (suppressNextAutosaveRef.current) {
+      suppressNextAutosaveRef.current = false;
+      return;
+    }
     const save: RunSave = {
       version: RUN_SAVE_VERSION,
       savedAt: new Date().toISOString(),
@@ -3106,9 +3129,15 @@ export default function App() {
             onDiscard={() =>
               setRunProgress((p) => ({ ...p, discardsUsed: p.discardsUsed + 1 }))
             }
+            onRunEnding={() => {
+              deleteRunSave();
+              setRunSaveState({ status: "none" });
+              suppressNextAutosaveRef.current = true;
+            }}
             onDefeat={(g) => {
               // Derrota definitiva (sección 8): se elimina el save de
-              // inmediato, no queda nada que "continuar".
+              // inmediato (redundante con onRunEnding, pero idempotente
+              // y a prueba de que se llegue aquí por otra vía).
               deleteRunSave();
               setRunSaveState({ status: "none" });
               setGs(g);
