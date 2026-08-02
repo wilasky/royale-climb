@@ -7,6 +7,7 @@ import type {
   Card,
   Relic,
   ShopSpecial,
+  SpecialCardKind,
   GameState,
   ScoreBreakdown,
 } from "./game/types";
@@ -21,7 +22,7 @@ import {
   beginEndlessContinuation,
 } from "./game/progression";
 import { phaseForRound } from "./game/progression";
-import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION, REWARD_REROLL_COSTS, REWARD_REROLL_MAX } from "./game/config";
+import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, SHOP_SPECIAL_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION, REWARD_REROLL_COSTS, REWARD_REROLL_MAX, SHOP_REROLL_COSTS, SHOP_REROLL_MAX } from "./game/config";
 import { pickRelics, pickRelicsAvoidingRepeat } from "./game/rewards";
 import { rerollCost, canReroll } from "./game/rerolls";
 import { hasRelicCapacity, replaceRelic } from "./game/relics";
@@ -1459,6 +1460,7 @@ function ShopScreen({
   onApplySpecial,
   onSellCard,
   onContinue,
+  onRerollSpend,
 }: {
   gs: GameState;
   rng: Rng;
@@ -1466,25 +1468,52 @@ function ShopScreen({
   onApplySpecial: (sp: ShopSpecial, cardId: string, suit?: Suit) => void;
   onSellCard: (cardId: string) => void;
   onContinue: () => void;
+  onRerollSpend: (cost: number) => void;
 }) {
   const [pendingSpecial, setPendingSpecial] = useState<ShopSpecial | null>(
     null
   );
   const [convSuit, setConvSuit] = useState<Suit>("spades");
   const [showSell, setShowSell] = useState(false);
-  const [usedSpecials, setUsedSpecials] = useState<number[]>([]);
+  // Se identifica por `kind` (no por índice de `stock.specials`) para que
+  // un reroll de tienda pueda regenerar las mejoras de carta sin perder
+  // el rastro de cuáles ya se aplicaron a una carta - "las compras ya
+  // realizadas no reaparecen automáticamente" (sección 4 del encargo).
+  const [usedSpecialKinds, setUsedSpecialKinds] = useState<
+    Set<SpecialCardKind>
+  >(new Set());
+  const [shopRerollCount, setShopRerollCount] = useState(0);
 
-  const stock = useMemo(() => {
+  const generateStock = (excludeSpecialKinds: Set<SpecialCardKind>) => {
     const owned = new Set(gs.relics.map((r) => r.id));
     const weights = SHOP_WEIGHTS[phaseForRound(gs.round)];
     const relics = pickRelics(rng, RELIC_POOL, owned, SHOP_RELIC_COUNT, weights);
-    const specials = shuffle(rng, SPECIAL_DEFS).slice(0, 3);
+    const availableSpecials = SPECIAL_DEFS.filter(
+      (sp) => !excludeSpecialKinds.has(sp.kind)
+    );
+    const specials = shuffle(rng, availableSpecials).slice(0, SHOP_SPECIAL_COUNT);
     return {
       relics: relics.map((r) => ({ relic: r, price: relicPrice(r.rarity) })),
       specials,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  };
+
+  const [stock, setStock] = useState(() => generateStock(new Set()));
+
+  const shopRerollAllowed = canReroll(
+    shopRerollCount,
+    SHOP_REROLL_MAX,
+    gs.money,
+    SHOP_REROLL_COSTS
+  );
+  const nextShopRerollCost = rerollCost(SHOP_REROLL_COSTS, shopRerollCount);
+
+  const handleShopReroll = () => {
+    if (!shopRerollAllowed) return;
+    onRerollSpend(nextShopRerollCost);
+    setStock(generateStock(usedSpecialKinds));
+    setShopRerollCount((c) => c + 1);
+  };
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -1548,7 +1577,7 @@ function ShopScreen({
       <h3 className="rc-eyebrow mb-2">Mejoras de carta</h3>
       <div className="mb-8 grid gap-3 sm:grid-cols-3">
         {stock.specials.map((sp, i) => {
-          const used = usedSpecials.includes(i);
+          const used = usedSpecialKinds.has(sp.kind);
           const afford = gs.money >= sp.price;
           return (
             <div
@@ -1583,15 +1612,24 @@ function ShopScreen({
         })}
       </div>
 
-      <div className="mb-8">
+      <div className="mb-8 flex flex-wrap gap-2">
         <button
           onClick={() => setShowSell((s) => !s)}
-          className="rc-btn rc-btn-ghost--magenta mb-2 px-4 py-2 text-sm"
+          className="rc-btn rc-btn-ghost--magenta px-4 py-2 text-sm"
         >
           {showSell
             ? "▲ Ocultar baraja"
             : "▼ Vender cartas (+2$ c/u)"}
         </button>
+        {shopRerollCount < SHOP_REROLL_MAX && (
+          <button
+            onClick={handleShopReroll}
+            disabled={!shopRerollAllowed}
+            className="rc-btn rc-btn-ghost--magenta px-4 py-2 text-sm disabled:opacity-40"
+          >
+            Volver a tirar tienda ({nextShopRerollCost}$)
+          </button>
+        )}
         {showSell && (
           <div className="rc-panel flex flex-wrap gap-2 p-3">
             {gs.deck.length <= 20 ? (
@@ -1687,10 +1725,9 @@ function ShopScreen({
                           ? convSuit
                           : undefined
                       );
-                      setUsedSpecials((u) => [
-                        ...u,
-                        stock.specials.indexOf(pendingSpecial),
-                      ]);
+                      setUsedSpecialKinds(
+                        (u) => new Set(u).add(pendingSpecial.kind)
+                      );
                       setPendingSpecial(null);
                     }}
                   />
@@ -2077,6 +2114,11 @@ export default function App() {
     advanceToNextRound(gs);
   };
 
+  const handleShopRerollSpend = (cost: number) => {
+    if (!gs) return;
+    setGs({ ...gs, money: gs.money - cost });
+  };
+
   const handleBuyRelic = (r: Relic, price: number) => {
     if (!gs || gs.money < price) return;
     if (hasRelicCapacity(gs.relics, MAX_ACTIVE_RELICS)) {
@@ -2235,6 +2277,7 @@ export default function App() {
             onApplySpecial={handleApplySpecial}
             onSellCard={handleSellCard}
             onContinue={handleContinueFromShop}
+            onRerollSpend={handleShopRerollSpend}
           />
         )}
 

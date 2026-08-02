@@ -146,3 +146,12 @@ export const DECLINE_RELIC_COMPENSATION = 3;
  */
 export const REWARD_REROLL_COSTS = [3, 5, 7];
 export const REWARD_REROLL_MAX = 3;
+
+/**
+ * Reroll de inventario de tienda — Iteración 2C, sección 4. Mismo
+ * patrón de coste creciente que el reroll de recompensa, con un
+ * intento extra permitido (máx. 4) y el coste tope (7$) repitiéndose
+ * a partir del tercero.
+ */
+export const SHOP_REROLL_COSTS = [3, 5, 7];
+export const SHOP_REROLL_MAX = 4;
