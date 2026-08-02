@@ -22,10 +22,13 @@ import {
   beginEndlessContinuation,
 } from "./game/progression";
 import { phaseForRound } from "./game/progression";
-import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, SHOP_SPECIAL_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION, REWARD_REROLL_COSTS, REWARD_REROLL_MAX, SHOP_REROLL_COSTS, SHOP_REROLL_MAX, BANISH_MAX, BANISH_COSTS } from "./game/config";
+import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, SHOP_SPECIAL_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION, REWARD_REROLL_COSTS, REWARD_REROLL_MAX, SHOP_REROLL_COSTS, SHOP_REROLL_MAX, BANISH_MAX, BANISH_COSTS, SYNERGY_MIN_AFFINITY } from "./game/config";
 import { pickRelicOffer } from "./game/offers";
 import { rerollCost, canReroll } from "./game/rerolls";
 import { canBanish, banishCost, applyBanish } from "./game/banish";
+import { dominantArchetypes } from "./game/buildIdentity";
+import { ARCHETYPE_LABELS } from "./game/archetypes";
+import { logRelicOfferDebug } from "./game/debug";
 import { hasRelicCapacity, replaceRelic } from "./game/relics";
 import { roundClearBaseReward, computeInterest, relicPrice } from "./game/economy";
 
@@ -1002,6 +1005,21 @@ function PlayScreen({
 
   const progress = Math.min(100, (gs.scoreThisRound / gs.target) * 100);
 
+  // Etiqueta discreta de identidad de build (docs/BUILD_AGENCY_ITERATION_2C.md,
+  // sección 8): máximo 2 arquetipos, solo con afinidad suficiente, nunca
+  // GENERAL ni números/pesos internos.
+  const buildArchetypeLabels = dominantArchetypes(
+    gs.relics,
+    SYNERGY_MIN_AFFINITY,
+    2
+  ).map((a) => ARCHETYPE_LABELS[a]);
+  const buildLabel =
+    buildArchetypeLabels.length === 1
+      ? `Build: ${buildArchetypeLabels[0]}`
+      : buildArchetypeLabels.length === 2
+      ? `Afinidad: ${buildArchetypeLabels.join(" · ")}`
+      : null;
+
   return (
     <div className="mx-auto flex max-w-5xl gap-4 px-3 pb-6">
       <aside className="hidden w-[4.5rem] shrink-0 flex-col items-center gap-2 pt-1 sm:flex">
@@ -1040,6 +1058,10 @@ function PlayScreen({
           value={`${gs.drawPile.length}/${gs.deck.length}`}
         />
       </div>
+
+      {buildLabel && (
+        <p className="mb-3 text-xs text-slate-500">{buildLabel}</p>
+      )}
 
       <div className="rc-panel mb-3 p-3">
         <div className="mb-1.5 flex items-baseline justify-between">
@@ -1332,7 +1354,7 @@ function RewardScreen({
 
   const [offers, setOffers] = useState<Relic[]>(() => {
     const weights = REWARD_WEIGHTS[phaseForRound(gs.round)];
-    return pickRelicOffer(
+    const initial = pickRelicOffer(
       rng,
       RELIC_POOL,
       excludeIds(),
@@ -1340,6 +1362,8 @@ function RewardScreen({
       weights,
       gs.relics
     );
+    logRelicOfferDebug(gs, { context: "reward", offers: initial, rerollsUsed: 0 });
+    return initial;
   });
   const [rerollCount, setRerollCount] = useState(0);
 
@@ -1356,17 +1380,21 @@ function RewardScreen({
     onRerollSpend(nextRerollCost);
     const weights = REWARD_WEIGHTS[phaseForRound(gs.round)];
     const previousIds = new Set(offers.map((r) => r.id));
-    setOffers(
-      pickRelicOffer(
-        rng,
-        RELIC_POOL,
-        excludeIds(),
-        REWARD_OFFER_COUNT,
-        weights,
-        gs.relics,
-        previousIds
-      )
+    const rerolled = pickRelicOffer(
+      rng,
+      RELIC_POOL,
+      excludeIds(),
+      REWARD_OFFER_COUNT,
+      weights,
+      gs.relics,
+      previousIds
     );
+    logRelicOfferDebug(gs, {
+      context: "reward-reroll",
+      offers: rerolled,
+      rerollsUsed: rerollCount + 1,
+    });
+    setOffers(rerolled);
     setRerollCount((c) => c + 1);
   };
 
@@ -1519,7 +1547,10 @@ function ShopScreen({
   >(new Set());
   const [shopRerollCount, setShopRerollCount] = useState(0);
 
-  const generateStock = (excludeSpecialKinds: Set<SpecialCardKind>) => {
+  const generateStock = (
+    excludeSpecialKinds: Set<SpecialCardKind>,
+    rerollsUsed = 0
+  ) => {
     const excludeRelicIds = new Set([
       ...gs.relics.map((r) => r.id),
       ...gs.banishedRelicIds,
@@ -1533,6 +1564,11 @@ function ShopScreen({
       weights,
       gs.relics
     );
+    logRelicOfferDebug(gs, {
+      context: rerollsUsed === 0 ? "shop" : "shop-reroll",
+      offers: relics,
+      rerollsUsed,
+    });
     const availableSpecials = SPECIAL_DEFS.filter(
       (sp) => !excludeSpecialKinds.has(sp.kind)
     );
@@ -1564,7 +1600,7 @@ function ShopScreen({
   const handleShopReroll = () => {
     if (!shopRerollAllowed) return;
     onRerollSpend(nextShopRerollCost);
-    setStock(generateStock(usedSpecialKinds));
+    setStock(generateStock(usedSpecialKinds, shopRerollCount + 1));
     setShopRerollCount((c) => c + 1);
   };
 

@@ -105,3 +105,25 @@ export function archetypesOfRelic(relicId: string): Archetype[] {
 export function relicMatchesArchetype(relicId: string, archetype: Archetype): boolean {
   return archetypesOfRelic(relicId).includes(archetype);
 }
+
+/**
+ * Etiquetas en castellano para mostrar al jugador (sección 8 del
+ * encargo: "Build: Escaleras", "Afinidad: Escaleras · Economía"). GENERAL
+ * nunca se muestra — `dominantArchetypes` en buildIdentity.ts ya lo
+ * excluye antes de llegar aquí, pero se documenta la entrada para que
+ * el `Record` quede completo y tipado.
+ */
+export const ARCHETYPE_LABELS: Record<Archetype, string> = {
+  PAIR: "Parejas",
+  STRAIGHT: "Escaleras",
+  FLUSH: "Color",
+  LOW_CARDS: "Cartas bajas",
+  HIGH_CARDS: "Cartas altas",
+  SMALL_HAND: "Manos minimalistas",
+  FIRST_HAND: "Primera mano",
+  LAST_HAND: "Última mano",
+  NO_DISCARD: "Sin descartes",
+  ECONOMY: "Economía",
+  CARD_ENHANCEMENT: "Mejoras de carta",
+  GENERAL: "General",
+};
