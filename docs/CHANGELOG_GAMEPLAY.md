@@ -651,3 +651,99 @@ interacción con "Salida en Falso" (ambos dependen de la primera mano
 de la ronda) puede sentirse redundante; "Nueva run" desde la pantalla
 de Coronación no conserva el Juramento/variante de la run recién
 ganada.
+
+# Changelog de gameplay — Iteración 2F
+
+Objetivo: persistencia de la run activa, recuperación tras cierre o
+refresco del navegador, y hardening del estado guardado. El diseño
+artístico sigue pausado; no se ha tocado balance, objetivos, economía,
+modificadores, bosses, Legados, Juramentos ni variantes. Ver
+`docs/PERSISTENCE_2F.md` para el detalle completo (formato, garantías
+de idempotencia, casos límite).
+
+## 1. RunSave versionado
+
+Nuevo `src/game/runSave.ts`, independiente de `PlayerProfile`: guarda
+el estado completo de la run activa (`GameState`, contadores de
+progreso propios de la run, y las ofertas pendientes de
+recompensa/tienda/reemplazo/Coronación) bajo su propia clave de
+`localStorage`, versionado (`RUN_SAVE_VERSION = 1`) con el mismo
+patrón de migración/validación estructural que ya usaba
+`profile.ts`. Nunca lanza: un save corrupto, de versión incompatible o
+con ids inexistentes se reporta como `"corrupt"` sin tocar el perfil.
+
+## 2. Autosave y "Continuar"
+
+Un único efecto en `App.tsx` guarda automáticamente en cada cambio de
+estado de juego mientras la pantalla activa sea guardable (jugar,
+recompensa, recompensa de dinero, tienda, Coronación) — cubre por
+construcción todas las transiciones relevantes sin mantener una lista
+manual de "eventos que guardan". El menú principal ofrece "Continuar"
+junto a "Nueva partida" cuando existe un save válido, con un resumen
+mínimo (ronda, Ante, dinero, modificadores, fecha). Empezar una run
+nueva sobre un save existente pide confirmación explícita.
+
+## 3. Restauración e idempotencia
+
+Restaurar es siempre **hidratar** un `GameState`/pantalla ya
+resueltos — nunca se vuelve a invocar un handler de transición
+(recompensa, compra, Coronación, subida de nivel). Este principio
+único evita, por construcción, que un refresco duplique una
+recompensa, una compra, o una Coronación. Se corrigió además un caso
+límite real: refrescar durante la breve animación posterior a una
+derrota ya no restaura una partida atascada con 0 manos.
+
+## 4. Coronación pendiente y Endless
+
+Cerrar el juego durante la pantalla de Coronación, antes de elegir
+Legado, ya no pierde la victoria: el save conserva el paso exacto
+(resumen / elección / confirmación) y se restaura sin volver a
+registrar la Coronación. "Seguir escalando" convierte el mismo save a
+Endless en vez de crear uno nuevo — Legados reclamados, banishes,
+modificadores y cartas se conservan.
+
+## 5. Estadísticas locales de perfil
+
+`PlayerProfile` gana contadores acumulativos (runs perdidas, manos
+jugadas, descartes, rerolls, banishes, compras, mejor ronda Endless).
+Nueva función pura `buildPlayerStats(profile)` deriva tasa de victoria
+y build favorito sin guardarlos — visible por ahora solo en el panel
+de depuración (`DEV`).
+
+## 6. Export/import de perfil
+
+El menú permite descargar el perfil como JSON y volver a importarlo
+(por ejemplo al cambiar de navegador). La importación valida
+estructura y versión antes de aceptar nada, nunca ejecuta el
+contenido recibido, y pide confirmación mostrando un resumen
+antes/después. Sin cuenta, sin nube, sin datos sensibles. El save de
+la run activa queda fuera de esta funcionalidad.
+
+## 7. Limpieza de scoring — El Eco del Trono
+
+El boss reconstruía el Mult base de la primera mano dividiendo el Mult
+final por 0.7 — frágil ante cualquier otro efecto que también tocara
+ese Mult. Ahora lee un `preBossBreakdown` explícito, calculado una vez
+en `scoreWithBoss`. El resultado numérico es idéntico (test de
+regresión que compara ambos caminos); no se ha tocado el motor de
+scoring más allá de este campo.
+
+## 8. Pruebas añadidas
+
+271 tests en 17 archivos (antes 218 en 16 al cierre de la 2E). Nuevos
+`runSave.test.ts` (validación, serialización, restauración,
+versión/migración, save corrupto, ids inexistentes, Endless,
+eliminación) y ampliaciones en `profile.test.ts` (fin de run,
+estadísticas derivadas, export/import, contrato explícito de
+no-idempotencia de `recordCoronation`) y `bosses.test.ts` (regresión
+numérica del Eco del Trono). Los 218 tests previos siguen pasando sin
+cambios de comportamiento.
+
+## 9. Riesgos pendientes
+
+Ver `docs/PERSISTENCE_2F.md` sección 14: sin test específico de cuota
+de `localStorage` excedida; la reseed determinista de los streams de
+RNG de recompensa/tienda al restaurar asume que su algoritmo no
+cambia entre versiones; no hay export/import del save de la run
+activa (fuera de alcance); `favoriteBuild` no se ha validado con datos
+reales de muchas Coronaciones.

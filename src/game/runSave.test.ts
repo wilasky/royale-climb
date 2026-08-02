@@ -158,6 +158,20 @@ describe("restauración completa (loadRunSave/saveRunSave)", () => {
     expect(loadRunSave(storage)).toEqual({ status: "none" });
   });
 
+  it("una run Endless (ronda >9) se guarda y restaura exactamente (sección 9)", () => {
+    const storage = memoryStorage();
+    const save = baseSave({
+      gameState: baseGs({ round: 11, ante: 4, endless: true, target: 12000 }),
+    });
+    saveRunSave(save, storage);
+    const result = loadRunSave(storage);
+    expect(result).toEqual({ status: "valid", save });
+    if (result.status === "valid") {
+      expect(result.save.gameState.endless).toBe(true);
+      expect(result.save.gameState.round).toBe(11);
+    }
+  });
+
   it("con storage null, loadRunSave devuelve status 'none'", () => {
     expect(loadRunSave(null)).toEqual({ status: "none" });
   });

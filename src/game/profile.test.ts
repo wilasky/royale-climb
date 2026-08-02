@@ -434,3 +434,21 @@ describe("exportProfileJson / importProfileJson (docs/PERSISTENCE_2F.md, secció
     expect(result.status).toBe("ok");
   });
 });
+
+// `recordCoronation` es una operación de "añadir", no de "fijar" — a
+// propósito, y a diferencia de `claimLegacy` (legacies.ts, que SÍ es
+// idempotente porque comprueba `claimedLegacyIds` antes de añadir). La
+// garantía de que un refresco nunca duplica una Coronación no viene de
+// que esta función sea idempotente, sino de que App.tsx SOLO la llama
+// desde el evento real de ganar la ronda 9 (handleWinRound) y JAMÁS
+// desde la restauración de un save (handleContinueRun se limita a
+// hidratar gs/screen/profile ya guardados, ver docs/PERSISTENCE_2F.md
+// sección 5). El test de abajo fija ese riesgo explícitamente.
+describe("contrato de idempotencia: restaurar nunca debe re-invocar recordCoronation", () => {
+  it("recordCoronation NO es idempotente por sí solo — llamarlo dos veces crea dos registros", () => {
+    let p = recordCoronation(defaultProfile(), record(), 9, 100);
+    p = recordCoronation(p, record(), 9, 100);
+    expect(p.coronations).toHaveLength(2);
+    expect(p.runsWon).toBe(2);
+  });
+});
