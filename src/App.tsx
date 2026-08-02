@@ -22,9 +22,10 @@ import {
   beginEndlessContinuation,
 } from "./game/progression";
 import { phaseForRound } from "./game/progression";
-import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, SHOP_SPECIAL_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION, REWARD_REROLL_COSTS, REWARD_REROLL_MAX, SHOP_REROLL_COSTS, SHOP_REROLL_MAX } from "./game/config";
+import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, SHOP_SPECIAL_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION, REWARD_REROLL_COSTS, REWARD_REROLL_MAX, SHOP_REROLL_COSTS, SHOP_REROLL_MAX, BANISH_MAX, BANISH_COSTS } from "./game/config";
 import { pickRelicOffer } from "./game/offers";
 import { rerollCost, canReroll } from "./game/rerolls";
+import { canBanish, banishCost, applyBanish } from "./game/banish";
 import { hasRelicCapacity, replaceRelic } from "./game/relics";
 import { roundClearBaseReward, computeInterest, relicPrice } from "./game/economy";
 
@@ -1317,17 +1318,28 @@ function RewardScreen({
   onChoose,
   onSkip,
   onRerollSpend,
+  onBanish,
 }: {
   gs: GameState;
   rng: Rng;
   onChoose: (relic: Relic) => void;
   onSkip: () => void;
   onRerollSpend: (cost: number) => void;
+  onBanish: (relicId: string) => void;
 }) {
+  const excludeIds = () =>
+    new Set([...gs.relics.map((r) => r.id), ...gs.banishedRelicIds]);
+
   const [offers, setOffers] = useState<Relic[]>(() => {
-    const owned = new Set(gs.relics.map((r) => r.id));
     const weights = REWARD_WEIGHTS[phaseForRound(gs.round)];
-    return pickRelicOffer(rng, RELIC_POOL, owned, REWARD_OFFER_COUNT, weights, gs.relics);
+    return pickRelicOffer(
+      rng,
+      RELIC_POOL,
+      excludeIds(),
+      REWARD_OFFER_COUNT,
+      weights,
+      gs.relics
+    );
   });
   const [rerollCount, setRerollCount] = useState(0);
 
@@ -1342,14 +1354,13 @@ function RewardScreen({
   const handleReroll = () => {
     if (!rerollAllowed) return;
     onRerollSpend(nextRerollCost);
-    const owned = new Set(gs.relics.map((r) => r.id));
     const weights = REWARD_WEIGHTS[phaseForRound(gs.round)];
     const previousIds = new Set(offers.map((r) => r.id));
     setOffers(
       pickRelicOffer(
         rng,
         RELIC_POOL,
-        owned,
+        excludeIds(),
         REWARD_OFFER_COUNT,
         weights,
         gs.relics,
@@ -1357,6 +1368,11 @@ function RewardScreen({
       )
     );
     setRerollCount((c) => c + 1);
+  };
+
+  const handleBanishOffer = (relicId: string) => {
+    onBanish(relicId);
+    setOffers((os) => os.filter((r) => r.id !== relicId));
   };
 
   return (
@@ -1371,10 +1387,9 @@ function RewardScreen({
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
         {offers.map((r) => (
-          <button
+          <div
             key={r.id}
-            onClick={() => onChoose(r)}
-            className={`rc-panel rc-panel__corners group relative flex flex-col items-center gap-2 overflow-hidden p-5 ring-1 transition-transform hover:scale-[1.04] active:scale-95 ${RARITY_RING[r.rarity]} ${RARITY_GLOW[r.rarity]}`}
+            className={`rc-panel rc-panel__corners group relative flex flex-col items-center gap-2 overflow-hidden p-5 ring-1 ${RARITY_RING[r.rarity]} ${RARITY_GLOW[r.rarity]}`}
           >
             <div
               className={`pointer-events-none absolute inset-0 opacity-[0.14] ${RARITY_TEXT[r.rarity]}`}
@@ -1383,17 +1398,34 @@ function RewardScreen({
                   "radial-gradient(circle at 50% 0%, currentColor, transparent 65%)",
               }}
             />
-            <div className="relative transition-transform group-hover:scale-110">
-              <RelicCardArt id={r.id} rarity={r.rarity} size={64} />
-            </div>
-            <span
-              className={`relative text-xs font-black uppercase tracking-wider ${RARITY_TEXT[r.rarity]}`}
+            <button
+              onClick={() => onChoose(r)}
+              className="relative flex w-full flex-col items-center gap-2 transition-transform hover:scale-[1.04] active:scale-95"
             >
-              {r.rarity}
-            </span>
-            <span className="relative text-lg font-bold text-slate-100">{r.name}</span>
-            <span className="text-xs text-slate-400">{r.desc}</span>
-          </button>
+              <div className="transition-transform group-hover:scale-110">
+                <RelicCardArt id={r.id} rarity={r.rarity} size={64} />
+              </div>
+              <span
+                className={`text-xs font-black uppercase tracking-wider ${RARITY_TEXT[r.rarity]}`}
+              >
+                {r.rarity}
+              </span>
+              <span className="text-lg font-bold text-slate-100">{r.name}</span>
+              <span className="text-xs text-slate-400">{r.desc}</span>
+            </button>
+            {canBanish(gs.banishedRelicIds, BANISH_MAX) && (
+              <button
+                onClick={() => handleBanishOffer(r.id)}
+                disabled={gs.money < banishCost(gs.banishedRelicIds, BANISH_COSTS)}
+                className="rc-btn rc-btn-flat relative px-3 py-1 text-[11px] disabled:opacity-40"
+              >
+                Desterrar
+                {banishCost(gs.banishedRelicIds, BANISH_COSTS) > 0
+                  ? ` (${banishCost(gs.banishedRelicIds, BANISH_COSTS)}$)`
+                  : " (gratis)"}
+              </button>
+            )}
+          </div>
         ))}
         {offers.length === 0 && (
           <p className="col-span-3 text-slate-500">
@@ -1462,6 +1494,7 @@ function ShopScreen({
   onSellCard,
   onContinue,
   onRerollSpend,
+  onBanish,
 }: {
   gs: GameState;
   rng: Rng;
@@ -1470,6 +1503,7 @@ function ShopScreen({
   onSellCard: (cardId: string) => void;
   onContinue: () => void;
   onRerollSpend: (cost: number) => void;
+  onBanish: (relicId: string) => void;
 }) {
   const [pendingSpecial, setPendingSpecial] = useState<ShopSpecial | null>(
     null
@@ -1486,12 +1520,15 @@ function ShopScreen({
   const [shopRerollCount, setShopRerollCount] = useState(0);
 
   const generateStock = (excludeSpecialKinds: Set<SpecialCardKind>) => {
-    const owned = new Set(gs.relics.map((r) => r.id));
+    const excludeRelicIds = new Set([
+      ...gs.relics.map((r) => r.id),
+      ...gs.banishedRelicIds,
+    ]);
     const weights = SHOP_WEIGHTS[phaseForRound(gs.round)];
     const relics = pickRelicOffer(
       rng,
       RELIC_POOL,
-      owned,
+      excludeRelicIds,
       SHOP_RELIC_COUNT,
       weights,
       gs.relics
@@ -1515,6 +1552,14 @@ function ShopScreen({
     SHOP_REROLL_COSTS
   );
   const nextShopRerollCost = rerollCost(SHOP_REROLL_COSTS, shopRerollCount);
+
+  const handleBanishOffer = (relicId: string) => {
+    onBanish(relicId);
+    setStock((s) => ({
+      ...s,
+      relics: s.relics.filter(({ relic }) => relic.id !== relicId),
+    }));
+  };
 
   const handleShopReroll = () => {
     if (!shopRerollAllowed) return;
@@ -1565,13 +1610,26 @@ function ShopScreen({
                 </div>
                 <div className="text-xs text-slate-400">{relic.desc}</div>
               </div>
-              <button
-                disabled={bought || !afford}
-                onClick={() => onBuyRelic(relic, price)}
-                className="rc-btn rc-btn-primary relative shrink-0 px-3 py-2 text-sm"
-              >
-                {bought ? "✓" : `${price}`}
-              </button>
+              <div className="relative flex shrink-0 flex-col items-stretch gap-1">
+                <button
+                  disabled={bought || !afford}
+                  onClick={() => onBuyRelic(relic, price)}
+                  className="rc-btn rc-btn-primary px-3 py-2 text-sm"
+                >
+                  {bought ? "✓" : `${price}`}
+                </button>
+                {!bought && canBanish(gs.banishedRelicIds, BANISH_MAX) && (
+                  <button
+                    onClick={() => handleBanishOffer(relic.id)}
+                    disabled={
+                      gs.money < banishCost(gs.banishedRelicIds, BANISH_COSTS)
+                    }
+                    className="rc-btn rc-btn-flat px-3 py-1 text-[11px] disabled:opacity-40"
+                  >
+                    Desterrar
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
@@ -2031,6 +2089,7 @@ export default function App() {
       history: [],
       endless,
       stats: { handsPlayed: 0, bestHand: 0, totalScore: 0 },
+      banishedRelicIds: [],
     };
     rewardRng.current = makeRng(seed + 555);
     shopRng.current = makeRng(seed + 999);
@@ -2125,6 +2184,25 @@ export default function App() {
   const handleShopRerollSpend = (cost: number) => {
     if (!gs) return;
     setGs({ ...gs, money: gs.money - cost });
+  };
+
+  /**
+   * Destierro permanente de modificador (docs/BUILD_AGENCY_ITERATION_2C.md,
+   * sección 7). Valida capacidad/dinero/no-poseído aquí, en el único sitio
+   * con acceso a `gs` — RewardScreen/ShopScreen ya deshabilitan el botón
+   * cuando no procede, esto es la comprobación real antes de mutar estado.
+   */
+  const handleBanish = (relicId: string) => {
+    if (!gs) return;
+    if (!canBanish(gs.banishedRelicIds, BANISH_MAX)) return;
+    if (gs.relics.some((r) => r.id === relicId)) return;
+    const cost = banishCost(gs.banishedRelicIds, BANISH_COSTS);
+    if (gs.money < cost) return;
+    setGs({
+      ...gs,
+      money: gs.money - cost,
+      banishedRelicIds: applyBanish(gs.banishedRelicIds, relicId),
+    });
   };
 
   const handleBuyRelic = (r: Relic, price: number) => {
@@ -2270,6 +2348,7 @@ export default function App() {
             onChoose={handleReward}
             onSkip={handleSkipReward}
             onRerollSpend={handleRewardRerollSpend}
+            onBanish={handleBanish}
           />
         )}
 
@@ -2286,6 +2365,7 @@ export default function App() {
             onSellCard={handleSellCard}
             onContinue={handleContinueFromShop}
             onRerollSpend={handleShopRerollSpend}
+            onBanish={handleBanish}
           />
         )}
 

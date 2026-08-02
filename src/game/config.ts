@@ -168,3 +168,12 @@ export const SHOP_REROLL_MAX = 4;
  */
 export const SYNERGY_MIN_AFFINITY = 2;
 export const SYNERGY_BONUS = 0.3;
+
+/**
+ * Destierro permanente de modificador — Iteración 2C, sección 7. El
+ * primer destierro de la run es gratis; a partir del segundo cuesta
+ * `BANISH_COSTS[1]`. Igual que los rerolls, el índice se limita al
+ * último valor del array si se agotara la tabla.
+ */
+export const BANISH_MAX = 2;
+export const BANISH_COSTS = [0, 5];

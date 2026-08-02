@@ -71,6 +71,13 @@ export interface GameState {
   history: { hand: string; score: number; round: number }[];
   endless: boolean;
   stats: { handsPlayed: number; bestHand: number; totalScore: number };
+  /**
+   * Modificadores desterrados permanentemente de las ofertas de esta run
+   * — Iteración 2C, sección 7. Persiste entre recompensas y tiendas (es
+   * parte de `GameState`, así que sobrevive a `startRound`/Endless sin
+   * lógica extra); una partida nueva siempre empieza con la lista vacía.
+   */
+  banishedRelicIds: string[];
 }
 
 export interface ScoreBreakdown {

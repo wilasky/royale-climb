@@ -44,6 +44,7 @@ function baseGs(overrides: Partial<GameState> = {}): GameState {
     history: [],
     endless: false,
     stats: { handsPlayed: 0, bestHand: 0, totalScore: 0 },
+    banishedRelicIds: [],
     ...overrides,
   };
 }
