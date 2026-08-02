@@ -217,3 +217,130 @@ propósito, para no tocar la config de build de la app solo por añadir tests).
 - El warning de build preexistente sobre el orden del `@import` de Google
   Fonts en `src/index.css` (P2-1 del audit) sigue sin corregir — es un asunto
   visual/de build, fuera del alcance de esta iteración de gameplay.
+
+# Changelog de gameplay — Iteración 2B
+
+Referencia: `docs/BALANCE_ITERATION_2B.md` (plan completo, playtest real de la
+2A y resultados finales). Esta iteración ataca el balance de progresión,
+economía y acumulación de modificadores que la 2A dejó explícitamente fuera
+de alcance — no toca jefes, encuentros especiales, nuevos modificadores,
+reroll/banish, metaprogresión, telemetría, guardado ni rediseño visual.
+
+## 1. Límite de 6 modificadores activos y reemplazo explícito
+
+Nueva constante `MAX_ACTIVE_RELICS = 6` (`src/game/config.ts`) y nuevo módulo
+`src/game/relics.ts` con dos funciones puras:
+
+- `hasRelicCapacity(relics, max)`: si hay hueco libre.
+- `replaceRelic(relics, removeId, added)`: sustituye un modificador por otro
+  preservando el orden, sin mutar la lista recibida.
+
+Con el cupo lleno, obtener un modificador nuevo (recompensa gratuita o
+compra en tienda) abre `RelicReplaceModal` en vez de añadirlo directo: el
+jugador ve el modificador entrante, elige explícitamente cuál de los 6
+actuales sustituir, confirma o cancela. Cancelar no cobra dinero ni pierde
+ningún modificador, en ningún contexto. El contador "X/6" es visible siempre
+en el HUD de partida (aside de escritorio y chips en móvil) y en las
+pantallas de recompensa y tienda.
+
+De paso se corrigió un bug latente en `ShopScreen`: el estado local
+`boughtRelics` marcaba un modificador como "comprado" en el clic, no en la
+confirmación real — con el modal de reemplazo, esto habría marcado el
+check ✓ aunque el jugador cancelara sin comprar nada. Ahora el estado de
+compra se deriva directamente de `gs.relics`.
+
+## 2. Cadencia de recompensas: modificador / dinero / tienda
+
+Nueva función pura `resolveRoundReward(round, endless)`
+(`src/game/progression.ts`), que sustituye a `resolveAfterReward`/
+`RoundOutcome` de la 2A. Antes, las 9 rondas de una run ofrecían un
+modificador gratuito; ahora cada ronda ofrece exactamente un tipo de
+recompensa:
+
+```
+Ronda 1 → Modificador   Ronda 4 → Modificador   Ronda 7 → Modificador
+Ronda 2 → Dinero        Ronda 5 → Dinero        Ronda 8 → Dinero
+Ronda 3 → Tienda        Ronda 6 → Tienda        Ronda 9 → VICTORIA (pisa la tienda natural)
+```
+
+Endless (ronda 10+) extiende el mismo ciclo de 3 rondas indefinidamente
+(`round % ROUNDS_PER_ANTE`), sin caso especial ni salto de comportamiento.
+
+Nueva pantalla `MoneyRewardScreen` y nuevo valor `"money-reward"` en el
+union `Screen` (`src/game/types.ts`). `handleWinRound` en `App.tsx` decide
+de entrada, al ganar la ronda, qué pantalla mostrar; un nuevo
+`advanceToNextRound(g)` sustituye a `proceedAfterReward` para avanzar
+siempre a la ronda siguiente una vez resuelta la recompensa, la tienda o el
+reemplazo de modificador.
+
+## 3. Recompensa económica
+
+Cantidad determinista por fase (mismo concepto que las tablas de rareza),
+`MONEY_REWARD_BY_PHASE`: fase 1 → 6$, fase 2 → 9$, fase 3 → 12$. En Nueva
+partida corresponde a las rondas 2/5/8; en Endless se indexa por
+`phaseForRound`, así que hereda 12$ indefinidamente (fase 3 tiene tope).
+
+## 4. Economía y precios
+
+| Elemento | Antes | Ahora |
+|---|---|---|
+| Cobro base por ronda superada | `3 + handsLeft` (3-7$) | `2 + min(handsLeft, 2)` (2-4$) |
+| Interés (Banca Privada) | +1$/5$, tope +6$/ronda | +1$/6$, tope +4$/ronda |
+| Precio modificador común | 5$ | 5$ (sin cambio) |
+| Precio modificador raro | 7$ | 8$ |
+| Precio modificador épico | 10$ | 12$ |
+| Precio modificador legendario | 14$ | 18$ |
+| Cristal Frágil (mejora) | 5$ | 6$ |
+| Núcleo de Acero (mejora) | 6$ | 7$ |
+| Compensación por rechazar modificador | 4$ fijo | 3$ fijo (`DECLINE_RELIC_COMPENSATION`) |
+
+Nuevo módulo `src/game/economy.ts` con `roundClearBaseReward`,
+`computeInterest`, `relicPrice` — funciones puras, constantes en
+`config.ts`. Ver `docs/BALANCE_ITERATION_2B.md` sección 4 para la
+justificación completa y el dinero esperado por fase.
+
+## 5. Curva de dificultad por tabla explícita
+
+`targetForRound` deja de usar la fórmula exponencial genérica de la 2A
+(`200 * 1.55^(ronda-1)`) y pasa a una tabla explícita para las rondas 1-9,
+calibrada contra el poder real de una build con hasta 6 modificadores:
+
+| Ronda | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+|---|---|---|---|---|---|---|---|---|---|
+| Objetivo | 180 | 280 | 450 | 700 | 1 050 | 1 900 | 3 200 | 5 200 | 8 500 |
+
+Endless (ronda 10+) continúa desde el objetivo de la ronda 9 con
+`ENDLESS_TARGET_GROWTH = 1.6`: `target(r) = target(9) * 1.6^(r-9)`.
+
+## 6. Balance conservador de 3 modificadores
+
+- **Equilibrio Par (`even_odd`)**: ×4 → ×3 Mult, y el As deja de contar
+  como par (antes `14 % 2 === 0` lo colaba, un artefacto de JS no
+  documentado — `GAME_AUDIT.md` P2-5).
+- **El Coleccionista (`the_collector`)**: +3 → +2 Mult por modificador
+  poseído. Candidato más claro a "beneficia cualquier mano" y "siempre es
+  la elección correcta" — con el nuevo tope de 6 modificadores su techo baja
+  de +27 (9×3, sin límite) a +12 (6×2).
+- **Banca Privada (`interest`)**: ver economía (sección 4 arriba).
+
+Los otros 21 modificadores se mantienen sin cambios — ver la clasificación
+completa en las 8 categorías pedidas (bonus de fichas, bonus aditivo de
+Mult, multiplicador final, economía, condicionales, utilidad-consistencia,
+mejoras universales, mejoras de arquetipo) en
+`docs/BALANCE_ITERATION_2B.md` sección 6.
+
+## 7. Pruebas añadidas
+
+63 tests en 5 archivos (antes 40 en 3): nuevo `relics.test.ts` (capacidad,
+reemplazo puro sin mutar), nuevo `economy.test.ts` (cobro base, interés con
+tope, precios por rareza), `progression.test.ts` ampliado/reescrito para
+`resolveRoundReward`, `scoring.test.ts` ampliado con casos de `even_odd`
+(con y sin As) y `the_collector` (múltiplos exactos de +2). Los 40 tests de
+la Iteración 2A y `rewards.test.ts` siguen pasando sin cambios.
+
+## 8. Riesgos pendientes
+
+Ver `docs/BALANCE_ITERATION_2B.md` sección 12 — la curva de objetivo y el
+dinero esperado por fase son estimaciones razonadas, no el resultado de una
+simulación exhaustiva; quedan como hipótesis a validar en el próximo
+playtest real.

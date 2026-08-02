@@ -1,10 +1,10 @@
-# Balance — Iteración 2B (BORRADOR — implementación pendiente)
+# Balance — Iteración 2B (implementado)
 
-> **Estado: planificado, sin implementar todavía.** Este documento es el plan de
-> diseño completo, escrito antes de tocar código, para poder retomarlo mañana
-> sin volver a rederivar los números. Cuando se implemente, este mismo archivo
-> se actualiza (se quita este aviso, se rellenan los resultados reales de
-> build/lint/test y el resumen final).
+> **Estado: implementado (2026-08-02).** Este documento nació como plan de
+> diseño completo, escrito antes de tocar código; esta versión ya refleja lo
+> que realmente se implementó (ver sección 11 para los resultados reales de
+> build/lint/test y el orden real de commits, que se reordenó ligeramente
+> respecto al plan original por una razón técnica documentada en esa sección).
 
 ## Evidencia del playtest (Iteración 2A)
 
@@ -155,9 +155,39 @@ Quedan marcados como hipótesis a validar en el próximo playtest.
 
 ## 6. Clasificación y ajustes de los 24 modificadores
 
-(Tabla completa de clasificación pendiente de rellenar en la implementación —
-ver más abajo los 3 cambios ya decididos; el resto de los 24 se documentan
-como "sin cambios" con motivo breve.)
+### Clasificación por categoría (8 categorías pedidas)
+
+| Modificador | Categoría |
+|---|---|
+| Eco Gemelo (`pair_mult`) | Mejoras de arquetipo (parejas) |
+| Marea Cromática (`flush_chips`) | Mejoras de arquetipo (color/mono-palo) |
+| Senda Recta (`straight_mult`) | Mejoras de arquetipo (escalera) |
+| Filo Negro (`spades_chip`) | Bonus de fichas (mono-palo ♠) |
+| Pulso Carmesí (`hearts_mult`) | Bonus aditivo de Mult (mono-palo ♥) |
+| Veta Dorada (`diamonds_money`) | Economía (mono-palo ♦) |
+| Garrote Pesado (`clubs_chip`) | Bonus de fichas (mono-palo ♣) |
+| Salida en Falso (`first_hand_mult`) | Condicionales (1ª mano) |
+| Plebe Útil (`low_card_chip`) | Bonus de fichas (rango bajo) |
+| Corte Noble (`face_mult`) | Bonus aditivo de Mult (figuras) |
+| Reciclaje (`discard_refund`) | Economía (descartes no usados) |
+| Mano Firme (`no_discard_mult`) | Condicionales (0 descartes, riesgo real) |
+| As bajo la Manga (`ace_chip`) | Bonus de fichas (Ases) |
+| Cadena Doble (`pair_chain`) | Mejoras de arquetipo (doble pareja) |
+| Bola de Nieve (`scaling_round`) | Mejoras universales (pasivo, crece con la run) |
+| Banca Privada (`interest`) | Economía — **cambiado** (ver tabla abajo) |
+| Maestro del Vidrio (`glass_master`) | Utilidad-consistencia (elimina riesgo de cristal) |
+| Minimalista (`small_hand`) | Condicionales (≤2 cartas) |
+| Prisma Roto (`spectrum_boost`) | Mejoras de arquetipo (espectro, arquetipo débil) |
+| Equilibrio Par (`even_odd`) | Multiplicador final, condicional — **cambiado** (ver tabla abajo) |
+| Pacto de Sangre (`blood_pact`) | Multiplicador final, universal (con riesgo: −1 mano) |
+| Desbordamiento (`overflow`) | Economía (condicional a superar x2) |
+| El Coleccionista (`the_collector`) | Multiplicador final, universal — **cambiado** (ver tabla abajo) |
+| Última Palabra (`final_hand`) | Condicionales (última mano) |
+
+Reparto por categoría: Bonus de fichas (4), Bonus aditivo de Mult (2),
+Multiplicador final (3), Economía (4), Condicionales (4),
+Utilidad-consistencia (1), Mejoras universales (1), Mejoras de arquetipo (5).
+Las 8 categorías pedidas quedan todas representadas.
 
 ### Cambios aplicados (conservadores, 3 de 24)
 
@@ -189,11 +219,6 @@ como "sin cambios" con motivo breve.)
   Espectro/Equilibrio del resto:** ya identificados con coste/condición real o
   arquetipo débil que necesita apoyo, no recorte.
 
-(Esta sección se completará con la tabla de las 8 categorías pedidas —
-bonus de fichas / bonus aditivo de mult / multiplicador final / economía /
-condicionales / utilidad-consistencia / mejoras universales / mejoras de
-arquetipo — al implementar.)
-
 ## 7. Decisiones interesantes (rechazo de recompensa)
 
 - `DECLINE_RELIC_COMPENSATION = 3$` (ver sección 4), constante única, no
@@ -201,27 +226,86 @@ arquetipo — al implementar.)
 - Con 6 espacios ocupados: reemplazar, rechazar, o cancelar — nunca se pierde
   un modificador de forma automática.
 
-## 8. Arquitectura prevista (archivos)
+## 8. Arquitectura implementada (archivos)
 
-Nuevos: `src/game/relics.ts`, `src/game/economy.ts`.
-Modificados: `src/game/config.ts`, `src/game/progression.ts`, `src/game/scoring.ts`,
-`src/App.tsx` (RelicReplaceModal compartido, MoneyRewardScreen nueva, dispatch de
-`handleWinRound`, precios de tienda desde config, contador X/6).
+Nuevos: `src/game/relics.ts`, `src/game/relics.test.ts`, `src/game/economy.ts`,
+`src/game/economy.test.ts`.
+Modificados: `src/game/config.ts`, `src/game/progression.ts`,
+`src/game/progression.test.ts`, `src/game/scoring.ts`, `src/game/scoring.test.ts`,
+`src/game/types.ts` (union `Screen` con `"money-reward"`), `src/App.tsx`
+(`RelicReplaceModal` y `MoneyRewardScreen` nuevos, `handleWinRound` despacha
+según `resolveRoundReward`, `advanceToNextRound` sustituye a
+`proceedAfterReward`, precios de tienda vía `relicPrice`, contador X/6 en HUD
+y pantallas de recompensa/tienda, fix del bug de `boughtRelics` en
+`ShopScreen`).
 
-## 9. Plan de commits (aún no realizados)
+## 9. Plan de commits — orden real ejecutado
 
-1. Límite de 6 modificadores y reemplazo (`relics.ts` + integración UI).
-2. Cadencia de recompensas (`resolveRoundReward` + `MoneyRewardScreen`).
-3. Economía y precios (`economy.ts` + tabla de precios).
-4. Curva de dificultad (tabla de objetivos + Endless).
-5. Balance conservador de modificadores (even_odd, collector, interest).
-6. Pruebas y documentación.
+El plan original (sección de "commits" del encargo) proponía el orden
+límite→cadencia→economía→curva→balance→tests. Se reordenó **curva de
+dificultad primero**: al iniciar la implementación, `config.ts` ya tenía
+`ROUND_TARGETS`/`ENDLESS_TARGET_GROWTH` aplicados de una edición previa que
+había eliminado `TARGET_BASE`/`TARGET_GROWTH`, dejando el build roto (import
+muerto en `progression.ts`). Arreglar la curva era el único cambio que
+restauraba un `build`/`test` en verde, así que pasó a ser el primer commit;
+el resto mantiene el orden conceptual del plan original. Cada bloque de
+tests se incluyó en el commit que introduce el cambio que testea, no todos
+al final, para que cada commit individual deje `build`+`test` en verde.
 
-## 10. Qué falta por hacer mañana
+1. Curva de dificultad por tabla explícita (arregla el build).
+2. Límite de 6 modificadores y reemplazo (`relics.ts` + integración UI).
+3. Cadencia de recompensas (`resolveRoundReward` + `MoneyRewardScreen`).
+4. Economía y precios (`economy.ts` + tabla de precios).
+5. Balance conservador de modificadores (even_odd, the_collector; interest ya
+   cubierto en el commit de economía).
+6. Documentación (este documento + `CHANGELOG_GAMEPLAY.md`).
 
-- Implementar todo lo anterior en código (nada tocado todavía).
-- Rellenar la tabla completa de clasificación de los 24 modificadores.
-- Escribir los tests de la sección 8 del encargo original.
-- Actualizar `docs/CHANGELOG_GAMEPLAY.md` (añadir, no borrar la Iteración 2A).
-- Verificación final: `npm run build`, `npm run lint`, `npm test`, reinicio
-  limpio del servidor, checklist manual completo del encargo.
+## 10. Decisiones de implementación no explícitas en el plan original
+
+- `resolveAfterReward`/`RoundOutcome` (2A) se eliminaron sin dejar alias:
+  respondían a una pregunta distinta ("qué pasa después de la recompensa")
+  de la nueva `resolveRoundReward` ("qué tipo de recompensa toca antes de
+  mostrarla"). `resolveAfterShop` se mantuvo igual, reutilizada dentro de un
+  nuevo `advanceToNextRound(g)` en `App.tsx`.
+- `MONEY_REWARD_BY_PHASE` se indexa por `phaseForRound(round)` (tope en
+  fase 3), no por número de ronda literal, para que Endless (rondas 11, 14,
+  17...) herede el mismo importe que la fase 3 sin caso especial.
+- Se eliminó el estado local `boughtRelics` de `ShopScreen` (bug latente: se
+  habría marcado "comprado" en el clic aunque el jugador cancelara un
+  reemplazo) y se derivó de `gs.relics.some(r => r.id === relic.id)`.
+- Confirmar un reemplazo desde la pantalla de recompensa avanza de ronda
+  automáticamente; desde la tienda no avanza (el jugador sigue comprando
+  hasta pulsar "Continuar"). Cancelar nunca cobra ni pierde nada, en ningún
+  contexto.
+
+## 11. Verificación final y resultados reales
+
+- `npm run build`: **correcto**, 24 módulos, sin errores de tipos. Único
+  warning preexistente (P2-1 del audit, orden de `@import` de Google Fonts
+  en `src/index.css`), no relacionado con esta iteración.
+- `npm run lint` (`oxlint`): **correcto**, sin errores.
+- `npm test` (`vitest run`): **correcto**, 5 archivos de test, 63 pruebas
+  (`progression`/`rewards`/`scoring`/`relics`/`economy`), todas en verde tras
+  cada commit.
+- Verificación manual: ver checklist en la sección "Verificación final" del
+  encargo original — completada tras el último commit de esta iteración
+  (reinicio limpio de `npm run dev`, run completa de 9 rondas, límite y
+  reemplazo de modificadores, precios, Endless desde ronda 10).
+
+## 12. Riesgos pendientes e hipótesis a validar en el próximo playtest
+
+- La curva de objetivo (sección 5) y las cantidades de dinero esperado por
+  fase (sección 4) son estimaciones razonadas a partir de la matemática de
+  `scorePlay`, no de una simulación exhaustiva — quedan como hipótesis.
+- Con el límite de 6 modificadores, comprobar en el próximo playtest si:
+  - la run termina normalmente con 4-6 modificadores (objetivo de diseño),
+    no con 8-9 como antes ni sistemáticamente con solo 2-3 (demasiado
+    restrictivo);
+  - el dinero disponible en cada tienda obliga a elegir (no sobra
+    sistemáticamente, no se queda corto sistemáticamente);
+  - la ronda 9 presenta riesgo real de derrota para una build mediocre, sin
+    que una build fuerte deje de poder superarla de una sola mano;
+  - `even_odd` sin el As sigue siendo una identidad de build viable (no se
+    ha vuelto demasiado débil al perder 1 de 13 rangos);
+  - `the_collector` sigue siendo una elección válida sin dominar como
+    "siempre correcta" independientemente de la mano.
