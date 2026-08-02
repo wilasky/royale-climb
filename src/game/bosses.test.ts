@@ -68,11 +68,24 @@ describe("estructura del catálogo de bosses", () => {
     }
   });
 
-  it("getBossById encuentra los 3 bosses implementados y devuelve null para un id desconocido", () => {
+  it("getBossById encuentra los 3 bosses de la 2D y devuelve null para un id desconocido", () => {
     expect(getBossById("unstable_mirror")?.name).toBe("El Espejo Inestable");
     expect(getBossById("the_accountant")?.name).toBe("El Contable Implacable");
     expect(getBossById("split_throne")?.name).toBe("El Trono Partido");
     expect(getBossById("no_existe")).toBeNull();
+  });
+
+  it("getBossById también encuentra el boss desbloqueable, aunque esté bloqueado por defecto", () => {
+    const boss = getBossById("thrones_echo");
+    expect(boss?.name).toBe("El Eco del Trono");
+    expect(boss?.locked).toBe(true);
+  });
+
+  it("Ante 2 tiene dos candidatos: uno siempre disponible y uno bloqueado", () => {
+    const candidates = BOSSES_BY_ANTE[2];
+    expect(candidates.map((b) => b.id).sort()).toEqual(["the_accountant", "thrones_echo"]);
+    expect(candidates.find((b) => b.id === "the_accountant")?.locked).toBe(false);
+    expect(candidates.find((b) => b.id === "thrones_echo")?.locked).toBe(true);
   });
 });
 
@@ -98,6 +111,88 @@ describe("selección determinista de boss por ante", () => {
       const second = selectBossForAnte(seed, 2);
       expect(first?.id).toBe(second?.id);
     }
+  });
+});
+
+describe("El Eco del Trono (thrones_echo) — boss desbloqueable, Iteración 2E", () => {
+  it("nunca sale seleccionado sin desbloquear, para ninguna seed", () => {
+    for (const seed of [1, 2, 999, 424242, 7, 42, 100]) {
+      expect(selectBossForAnte(seed, 2)?.id).not.toBe("thrones_echo");
+      expect(selectBossForAnte(seed, 2, new Set())?.id).not.toBe("thrones_echo");
+    }
+  });
+
+  it("una vez desbloqueado, puede salir seleccionado para alguna seed", () => {
+    const unlocked = new Set(["thrones_echo"]);
+    const results = new Set(
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((seed) => selectBossForAnte(seed, 2, unlocked)?.id)
+    );
+    expect(results.has("thrones_echo")).toBe(true);
+    expect(results.has("the_accountant")).toBe(true); // sigue pudiendo salir el otro candidato
+  });
+
+  it("la selección sigue siendo determinista con el boss desbloqueado", () => {
+    const unlocked = new Set(["thrones_echo"]);
+    const a = selectBossForAnte(555, 2, unlocked);
+    const b = selectBossForAnte(555, 2, unlocked);
+    expect(a?.id).toBe(b?.id);
+  });
+
+  it("desbloquear un boss de otro ante no afecta a la selección de Ante 2", () => {
+    const unlocked = new Set(["algun_boss_de_otro_ante"]);
+    for (const seed of [1, 2, 999]) {
+      expect(selectBossForAnte(seed, 2, unlocked)?.id).toBe("the_accountant");
+    }
+  });
+
+  it("la primera mano puntúa a ×0.7 Mult y fija el eco a partir de su Mult base", () => {
+    const played = [card({ rank: 10 }), card({ rank: 10 }), card({ rank: 10 })]; // Trío
+    const gs = baseGs({ activeBossId: "thrones_echo", bossState: { echoBonus: 0 } });
+    const base = scorePlay(played, [], gs, true, false);
+    const bd = scoreWithBoss(played, [], gs, true, false);
+
+    expect(bd.chips).toBe(base.chips);
+    expect(bd.mult).toBe(Math.round(base.mult * 0.7 * 10) / 10);
+    expect(bd.total).toBe(Math.round(bd.chips * bd.mult));
+    expect(bd.lines.some((l) => l.includes("fija el eco"))).toBe(true);
+
+    const state2 = advanceBossState(gs, bd, true, false);
+    const expectedEcho = Math.round(((bd.mult / 0.7) * 0.2 * 10)) / 10;
+    expect(state2).toEqual({ echoBonus: expectedEcho });
+  });
+
+  it("las manos siguientes suman el eco fijado, sin tocar las fichas", () => {
+    const first = [card({ rank: 10 }), card({ rank: 10 }), card({ rank: 10 })]; // Trío
+    const gs1 = baseGs({ activeBossId: "thrones_echo", bossState: { echoBonus: 0 } });
+    const bd1 = scoreWithBoss(first, [], gs1, true, false);
+    const state2 = advanceBossState(gs1, bd1, true, false);
+
+    const second = [card({ rank: 4 })]; // Carta alta
+    const gs2 = baseGs({ activeBossId: "thrones_echo", bossState: state2 });
+    const base2 = scorePlay(second, [], gs2, false, false);
+    const bd2 = scoreWithBoss(second, [], gs2, false, false);
+    const echoBonus = (state2 as { echoBonus: number }).echoBonus;
+
+    expect(bd2.chips).toBe(base2.chips);
+    expect(bd2.mult).toBe(Math.round((base2.mult + echoBonus) * 10) / 10);
+    expect(bd2.total).toBe(Math.round(bd2.chips * bd2.mult));
+    expect(bd2.lines.some((l) => l.includes("Eco del Trono"))).toBe(true);
+  });
+
+  it("describeBossState distingue antes y después de fijar el eco", () => {
+    const before = baseGs({ activeBossId: "thrones_echo", bossState: { echoBonus: 0 } });
+    expect(describeBossState(before)).toMatch(/sin jugar/i);
+
+    const after = baseGs({ activeBossId: "thrones_echo", bossState: { echoBonus: 2.4 } });
+    expect(describeBossState(after)).toMatch(/Eco fijado/);
+  });
+
+  it("preview (scoreWithBoss) y ejecución son la misma llamada, determinista", () => {
+    const played = [card({ rank: 7 }), card({ rank: 7 })];
+    const gs = baseGs({ activeBossId: "thrones_echo", bossState: { echoBonus: 1.2 } });
+    const a = scoreWithBoss(played, [], gs, false, false);
+    const b = scoreWithBoss(played, [], gs, false, false);
+    expect(a).toEqual(b);
   });
 });
 

@@ -39,6 +39,14 @@ export interface BossDefinition {
   id: string;
   name: string;
   ante: BossAnte;
+  /**
+   * Si es true, este boss requiere un desbloqueo de perfil (Legado de
+   * la Corona, ver docs/METAPROGRESSION_2E.md) antes de poder salir
+   * seleccionado — `selectBossForAnte` lo excluye de los candidatos
+   * salvo que su id esté en `unlockedBossIds`. Los bosses de la
+   * Iteración 2D no lo requieren (`locked: false`).
+   */
+  locked: boolean;
   /** Una línea, para el aviso/telegraph y el panel de boss activo. */
   shortDescription: string;
   /** Explicación algo más larga, para la pantalla de aviso. */
@@ -71,6 +79,7 @@ const UNSTABLE_MIRROR: BossDefinition = {
   id: "unstable_mirror",
   name: "El Espejo Inestable",
   ante: 1,
+  locked: false,
   shortDescription: "Repetir el mismo tipo de mano dos veces seguidas: ×0.75 Mult.",
   description:
     "Si juegas el mismo tipo de mano dos veces seguidas en esta ronda, la " +
@@ -116,6 +125,7 @@ const THE_ACCOUNTANT: BossDefinition = {
   id: "the_accountant",
   name: "El Contable Implacable",
   ante: 2,
+  locked: false,
   shortDescription:
     "Cada mano debe superar en puntos a la anterior o sus fichas se reducen a la mitad.",
   description:
@@ -165,6 +175,7 @@ const SPLIT_THRONE: BossDefinition = {
   id: "split_throne",
   name: "El Trono Partido",
   ante: 3,
+  locked: false,
   shortDescription:
     "Al superar el 50% del objetivo: +40 fichas pero ×0.7 Mult el resto de la ronda.",
   description:
@@ -205,15 +216,81 @@ const SPLIT_THRONE: BossDefinition = {
 };
 
 /**
+ * Ante 2 — El Eco del Trono (docs/BOSS_DESIGN_2D.md, candidato B
+ * aplazado; desbloqueado como Legado de la Corona "Eco Prohibido" en
+ * la Iteración 2E, ver docs/METAPROGRESSION_2E.md). Segundo candidato
+ * posible para el boss de Ante 2, junto a El Contable Implacable —
+ * `locked: true` hasta que el perfil tenga el Legado reclamado.
+ *
+ * La primera mano de la ronda puntúa con su multiplicador reducido a
+ * ×0.7 (se "sacrifica" para fijar el eco); a partir de ahí, cada mano
+ * posterior recibe un bonus aditivo de multiplicador igual al 20% del
+ * multiplicador *base* de esa primera mano (antes del ×0.7 — se
+ * reconstruye dividiendo entre 0.7, ya que `modifyScore` solo puede
+ * devolver el desglose ya modificado). Premia abrir fuerte en vez de
+ * cerrar fuerte, lo opuesto en espíritu a El Contable Implacable.
+ */
+const THRONES_ECHO: BossDefinition = {
+  id: "thrones_echo",
+  name: "El Eco del Trono",
+  ante: 2,
+  locked: true,
+  shortDescription:
+    "Tu 1ª mano puntúa a ×0.7 Mult, pero fija un eco: el resto de manos ganan Mult extra.",
+  description:
+    "El trono repite un eco de tu primera decisión durante el resto del " +
+    "combate. Tu primera mano de la ronda se sacrifica a ×0.7 Mult para " +
+    "fijar el eco; a partir de ahí, cada mano posterior recibe un bonus " +
+    "aditivo de Mult basado en la fuerza de esa primera mano.",
+  initialState: () => ({ echoBonus: 0 as number }),
+  modifyScore: (breakdown, ctx, state) => {
+    if (ctx.isFirstHand) {
+      const mult = Math.round(breakdown.mult * 0.7 * 10) / 10;
+      const total = Math.round(breakdown.chips * mult);
+      return {
+        ...breakdown,
+        mult,
+        total,
+        lines: [...breakdown.lines, "El Eco del Trono: ×0.7 Mult (fija el eco)"],
+      };
+    }
+    const echoBonus = state.echoBonus as number;
+    if (echoBonus <= 0) return breakdown;
+    const mult = Math.round((breakdown.mult + echoBonus) * 10) / 10;
+    const total = Math.round(breakdown.chips * mult);
+    return {
+      ...breakdown,
+      mult,
+      total,
+      lines: [...breakdown.lines, `El Eco del Trono: +${echoBonus} Mult (eco)`],
+    };
+  },
+  afterHand: (state, ctx, breakdown) => {
+    if (!ctx.isFirstHand) return state;
+    const impliedBaseMult = breakdown.mult / 0.7;
+    const echoBonus = Math.round(impliedBaseMult * 0.2 * 10) / 10;
+    return { ...state, echoBonus };
+  },
+  describeState: (state) => {
+    const echoBonus = state.echoBonus as number;
+    return echoBonus > 0
+      ? `Eco fijado: +${echoBonus} Mult en cada mano restante.`
+      : "Primera mano todavía sin jugar (fija el eco a ×0.7 Mult).";
+  },
+};
+
+/**
  * Catálogo de bosses por ante. Un ante puede tener varios candidatos —
- * la selección determinista de arriba ya está preparada para eso,
- * aunque en esta iteración cada ante solo tenga uno implementado (los
- * otros quedan documentados en docs/BOSS_DESIGN_2D.md como candidatos
- * futuros, sin ninguna línea de código todavía).
+ * la selección determinista de abajo ya está preparada para eso.
+ * Ante 2 ya tiene dos: El Contable Implacable (siempre disponible) y
+ * El Eco del Trono (`locked: true`, requiere el Legado "Eco Prohibido").
+ * Ante 1 y Ante 3 (final) siguen con un único candidato — los otros
+ * cuatro conceptos aplazados quedan documentados en
+ * docs/BOSS_DESIGN_2D.md, sin ninguna línea de código todavía.
  */
 export const BOSSES_BY_ANTE: Record<BossAnte, BossDefinition[]> = {
   1: [UNSTABLE_MIRROR],
-  2: [THE_ACCOUNTANT],
+  2: [THE_ACCOUNTANT, THRONES_ECHO],
   3: [SPLIT_THRONE],
 };
 
@@ -230,15 +307,25 @@ export function getBossById(id: string): BossDefinition | null {
 
 /**
  * Selección determinista del boss de un ante. Misma seed + mismo ante
- * siempre devuelve el mismo boss (mismo `rng()`, mismo cálculo de
- * índice). Con un solo candidato por ante (estado actual), `rng()` se
- * sigue consumiendo igual pero el resultado es trivialmente el único
- * candidato — así que añadir un segundo candidato el día de mañana no
- * cambia el comportamiento de determinismo, solo dejaría de ser trivial.
- * Devuelve `null` si el ante no tiene ningún boss definido todavía.
+ * + mismo conjunto de bosses desbloqueados ⇒ siempre el mismo boss
+ * (mismo `rng()`, mismo cálculo de índice sobre la misma lista de
+ * candidatos). `unlockedBossIds` (por defecto vacío) filtra los
+ * candidatos con `locked: true` cuyo id no esté en el conjunto — así
+ * un boss desbloqueable (Iteración 2E, docs/METAPROGRESSION_2E.md)
+ * nunca puede salir seleccionado antes de que el perfil lo desbloquee,
+ * y una vez desbloqueado entra a competir con total naturalidad junto
+ * a los candidatos ya disponibles del mismo ante. Devuelve `null` si
+ * el ante no tiene ningún candidato disponible (ninguno definido, o
+ * los únicos que hay siguen bloqueados).
  */
-export function selectBossForAnte(seed: number, ante: BossAnte): BossDefinition | null {
-  const candidates = BOSSES_BY_ANTE[ante] ?? [];
+export function selectBossForAnte(
+  seed: number,
+  ante: BossAnte,
+  unlockedBossIds: ReadonlySet<string> = new Set()
+): BossDefinition | null {
+  const candidates = (BOSSES_BY_ANTE[ante] ?? []).filter(
+    (b) => !b.locked || unlockedBossIds.has(b.id)
+  );
   if (candidates.length === 0) return null;
   const rng = makeRng(seed + ante * 97711);
   const index = Math.floor(rng() * candidates.length);

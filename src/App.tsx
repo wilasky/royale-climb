@@ -30,6 +30,9 @@ import {
   getBossById,
   describeBossState,
 } from "./game/bosses";
+import { loadProfile, saveProfile, recordRunStart } from "./game/profile";
+import type { PlayerProfile } from "./game/profile";
+import { getUnlockedBossIds } from "./game/legacies";
 import { phaseForRound } from "./game/progression";
 import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, SHOP_SPECIAL_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION, REWARD_REROLL_COSTS, REWARD_REROLL_MAX, SHOP_REROLL_COSTS, SHOP_REROLL_MAX, BANISH_MAX, BANISH_COSTS, SYNERGY_MIN_AFFINITY } from "./game/config";
 import { pickRelicOffer } from "./game/offers";
@@ -825,12 +828,14 @@ function PlayScreen({
   onWinRound,
   onDefeat,
   spawnParticles,
+  unlockedBossIds,
 }: {
   gs: GameState;
   setGs: (g: GameState) => void;
   onWinRound: (g: GameState) => void;
   onDefeat: (g: GameState) => void;
   spawnParticles: (x: number, y: number, n: number, big: boolean) => void;
+  unlockedBossIds: ReadonlySet<string>;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [lastScore, setLastScore] = useState<ScoreBreakdown | null>(null);
@@ -1106,7 +1111,11 @@ function PlayScreen({
           })()
         ) : (
           (() => {
-            const upcoming = selectBossForAnte(gs.seed, gs.ante as 1 | 2 | 3);
+            const upcoming = selectBossForAnte(
+              gs.seed,
+              gs.ante as 1 | 2 | 3,
+              unlockedBossIds
+            );
             if (!upcoming) return null;
             return (
               <div className="rc-panel mb-3 p-3 opacity-80">
@@ -2128,6 +2137,11 @@ export default function App() {
     context: "reward" | "shop";
     price?: number;
   } | null>(null);
+  // Perfil de progresión persistente — Iteración 2E
+  // (docs/METAPROGRESSION_2E.md). Independiente de `gs`: sobrevive a
+  // partidas perdidas, a cerrar la pestaña, a "Nueva partida".
+  const [profile, setProfile] = useState<PlayerProfile>(() => loadProfile());
+  const unlockedBossIds = useMemo(() => getUnlockedBossIds(profile), [profile]);
   const rewardRng = useRef<Rng>(makeRng(1));
   const shopRng = useRef<Rng>(makeRng(1));
 
@@ -2145,17 +2159,23 @@ export default function App() {
   );
 
   const startRound = useCallback(
-    (base: GameState, round: number): GameState => {
+    (
+      base: GameState,
+      round: number,
+      unlockedBossIds: ReadonlySet<string>
+    ): GameState => {
       const rng = makeRng(base.seed + round * 104729);
       const drawPile = shuffle(rng, base.deck);
       // Boss de esta ronda (docs/BOSS_DESIGN_2D.md): se recalcula en
       // cada startRound, así que nunca sobrevive a la ronda para la que
       // fue seleccionado. Endless no tiene bosses (isBossRound ya lo
       // excluye), y selectBossForAnte devuelve null si ese ante todavía
-      // no tiene ningún boss definido.
+      // no tiene ningún boss definido. `unlockedBossIds` (Iteración 2E)
+      // habilita bosses desbloqueables vía Legado de la Corona — ver
+      // docs/METAPROGRESSION_2E.md.
       const ante = anteOfRound(round);
       const boss = isBossRound(round, base.endless)
-        ? selectBossForAnte(base.seed, ante as 1 | 2 | 3)
+        ? selectBossForAnte(base.seed, ante as 1 | 2 | 3, unlockedBossIds)
         : null;
       let g: GameState = {
         ...base,
@@ -2184,6 +2204,11 @@ export default function App() {
 
   const newGame = (seed: number, endless: boolean) => {
     setLastSeed(seed);
+    // "runs iniciadas" (docs/METAPROGRESSION_2E.md, sección 1) - se
+    // cuenta aquí, gane o pierda la run después.
+    const startedProfile = recordRunStart(profile);
+    setProfile(startedProfile);
+    saveProfile(startedProfile);
     const deck = buildStartingDeck();
     const base: GameState = {
       seed,
@@ -2215,7 +2240,7 @@ export default function App() {
     rewardRng.current = makeRng(seed + 555);
     shopRng.current = makeRng(seed + 999);
     setParticles([]);
-    setGs(startRound(base, 1));
+    setGs(startRound(base, 1, unlockedBossIds));
     setScreen("play");
   };
 
@@ -2251,7 +2276,7 @@ export default function App() {
    *  una sola vez si tocaba tienda/victoria antes de llegar aquí. */
   const advanceToNextRound = (g: GameState) => {
     const { nextRound } = resolveAfterShop(g.round);
-    setGs(startRound(g, nextRound));
+    setGs(startRound(g, nextRound, unlockedBossIds));
     setScreen("play");
   };
 
@@ -2366,7 +2391,7 @@ export default function App() {
   const handleContinueEndless = () => {
     if (!gs) return;
     const { round, endless } = beginEndlessContinuation(gs.round);
-    setGs(startRound({ ...gs, endless }, round));
+    setGs(startRound({ ...gs, endless }, round, unlockedBossIds));
     setScreen("play");
   };
 
@@ -2455,6 +2480,7 @@ export default function App() {
             setGs={setGs}
             spawnParticles={spawnParticles}
             onWinRound={handleWinRound}
+            unlockedBossIds={unlockedBossIds}
             onDefeat={(g) => {
               setGs(g);
               setScreen("defeat");
