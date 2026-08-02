@@ -19,12 +19,27 @@ export type BossAnte = 1 | 2 | 3;
  * `gs` es el estado ANTES de sumar el resultado de esta mano (igual que
  * recibe `scorePlay`) — para saber el total acumulado tras la mano hay
  * que sumar `gs.scoreThisRound + breakdown.total` explícitamente.
+ *
+ * `preBossBreakdown` — Iteración 2F, limpieza técnica documentada en
+ * la 2E (docs/METAPROGRESSION_2E.md, sección "Eco del Trono"): el
+ * resultado de `scorePlay` ANTES de que `modifyScore` de ningún boss
+ * lo toque. Existe para que un boss que necesite "el valor original
+ * de esta mano" (p.ej. El Eco del Trono, que fija su eco a partir del
+ * Mult de la primera mano) lo lea directamente en vez de tener que
+ * deshacer matemáticamente su propia transformación — antes de este
+ * cambio, `THRONES_ECHO.afterHand` calculaba `breakdown.mult / 0.7`
+ * para reconstruirlo, una operación frágil que dejaba de tener
+ * sentido en cuanto la fórmula de `modifyScore` cambiara. El
+ * resultado numérico no cambia: `preBossBreakdown` es exactamente el
+ * mismo objeto que ya se calculaba internamente, solo que ahora se
+ * expone en vez de descartarse.
  */
 export interface BossScoreContext {
   gs: GameState;
   isFirstHand: boolean;
   isLastHand: boolean;
   handName: string;
+  preBossBreakdown: ScoreBreakdown;
 }
 
 /**
@@ -265,10 +280,14 @@ const THRONES_ECHO: BossDefinition = {
       lines: [...breakdown.lines, `El Eco del Trono: +${echoBonus} Mult (eco)`],
     };
   },
-  afterHand: (state, ctx, breakdown) => {
+  afterHand: (state, ctx) => {
     if (!ctx.isFirstHand) return state;
-    const impliedBaseMult = breakdown.mult / 0.7;
-    const echoBonus = Math.round(impliedBaseMult * 0.2 * 10) / 10;
+    // Iteración 2F: se lee el Mult original directamente de
+    // `preBossBreakdown` en vez de reconstruirlo dividiendo entre 0.7
+    // — ver el comentario de `BossScoreContext` en la cabecera de este
+    // archivo. Mismo resultado numérico que antes, sin la división.
+    const baseMult = ctx.preBossBreakdown.mult;
+    const echoBonus = Math.round(baseMult * 0.2 * 10) / 10;
     return { ...state, echoBonus };
   },
   describeState: (state) => {
@@ -357,29 +376,45 @@ export function scoreWithBoss(
   const base = scorePlay(played, heldInHand, gs, isFirstHand, isLastHand);
   const boss = gs.activeBossId ? getBossById(gs.activeBossId) : null;
   if (!boss?.modifyScore) return base;
-  const ctx: BossScoreContext = { gs, isFirstHand, isLastHand, handName: base.handName };
+  const ctx: BossScoreContext = {
+    gs,
+    isFirstHand,
+    isLastHand,
+    handName: base.handName,
+    preBossBreakdown: base,
+  };
   return boss.modifyScore(base, ctx, gs.bossState);
 }
 
 /**
  * Nuevo `bossState` tras resolver una mano (llamar con el `breakdown` ya
- * pasado por `scoreWithBoss`). Si no hay boss activo o no define
- * `afterHand`, devuelve el `bossState` sin cambios (mismo objeto, sin
- * mutar ni clonar innecesariamente).
+ * pasado por `scoreWithBoss`, y con los MISMOS `played`/`heldInHand` que
+ * se le pasaron a `scoreWithBoss` para esa mano). Si no hay boss activo o
+ * no define `afterHand`, devuelve el `bossState` sin cambios (mismo
+ * objeto, sin mutar ni clonar innecesariamente).
+ *
+ * Recalcula `scorePlay` (puro, sin RNG, sin efectos) para reconstruir
+ * `preBossBreakdown` — Iteración 2F: es un recálculo barato (unas pocas
+ * cartas) que evita que `scoreWithBoss` tenga que cambiar su forma de
+ * retorno solo para transportar el desglose previo hasta aquí.
  */
 export function advanceBossState(
   gs: GameState,
+  played: Card[],
+  heldInHand: Card[],
   breakdown: ScoreBreakdown,
   isFirstHand: boolean,
   isLastHand: boolean
 ): Record<string, unknown> {
   const boss = gs.activeBossId ? getBossById(gs.activeBossId) : null;
   if (!boss?.afterHand) return gs.bossState;
+  const preBossBreakdown = scorePlay(played, heldInHand, gs, isFirstHand, isLastHand);
   const ctx: BossScoreContext = {
     gs,
     isFirstHand,
     isLastHand,
     handName: breakdown.handName,
+    preBossBreakdown,
   };
   return boss.afterHand(gs.bossState, ctx, breakdown);
 }

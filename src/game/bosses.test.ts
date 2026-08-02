@@ -156,8 +156,11 @@ describe("El Eco del Trono (thrones_echo) — boss desbloqueable, Iteración 2E"
     expect(bd.total).toBe(Math.round(bd.chips * bd.mult));
     expect(bd.lines.some((l) => l.includes("fija el eco"))).toBe(true);
 
-    const state2 = advanceBossState(gs, bd, true, false);
-    const expectedEcho = Math.round(((bd.mult / 0.7) * 0.2 * 10)) / 10;
+    const state2 = advanceBossState(gs, played, [], bd, true, false);
+    // Ya no hace falta reconstruir el Mult original dividiendo entre
+    // 0.7 (Iteración 2F): `base` (calculado arriba con scorePlay
+    // directamente) ES ese valor original.
+    const expectedEcho = Math.round(base.mult * 0.2 * 10) / 10;
     expect(state2).toEqual({ echoBonus: expectedEcho });
   });
 
@@ -165,7 +168,7 @@ describe("El Eco del Trono (thrones_echo) — boss desbloqueable, Iteración 2E"
     const first = [card({ rank: 10 }), card({ rank: 10 }), card({ rank: 10 })]; // Trío
     const gs1 = baseGs({ activeBossId: "thrones_echo", bossState: { echoBonus: 0 } });
     const bd1 = scoreWithBoss(first, [], gs1, true, false);
-    const state2 = advanceBossState(gs1, bd1, true, false);
+    const state2 = advanceBossState(gs1, first, [], bd1, true, false);
 
     const second = [card({ rank: 4 })]; // Carta alta
     const gs2 = baseGs({ activeBossId: "thrones_echo", bossState: state2 });
@@ -193,6 +196,27 @@ describe("El Eco del Trono (thrones_echo) — boss desbloqueable, Iteración 2E"
     const a = scoreWithBoss(played, [], gs, false, false);
     const b = scoreWithBoss(played, [], gs, false, false);
     expect(a).toEqual(b);
+  });
+
+  it("Iteración 2F: leer ctx.preBossBreakdown.mult da exactamente el mismo eco que la reconstrucción por división que reemplaza (regresión)", () => {
+    // Antes de la 2F, THRONES_ECHO.afterHand calculaba
+    // `breakdown.mult / 0.7` para reconstruir el Mult original de la
+    // primera mano. Este test fija ese cálculo aquí, por fuera del
+    // motor, y comprueba que coincide con lo que ahora produce
+    // advanceBossState leyendo ctx.preBossBreakdown.mult directamente
+    // — la limpieza técnica no cambió ningún resultado numérico.
+    for (const rankSet of [[10, 10, 10], [3, 3], [14], [7, 7, 7, 7]]) {
+      const played = rankSet.map((rank) => card({ rank }));
+      const gs = baseGs({ activeBossId: "thrones_echo", bossState: { echoBonus: 0 } });
+      const bd = scoreWithBoss(played, [], gs, true, false);
+
+      const echoViaOldDivision = Math.round((bd.mult / 0.7) * 0.2 * 10) / 10;
+      const newState = advanceBossState(gs, played, [], bd, true, false) as {
+        echoBonus: number;
+      };
+
+      expect(newState.echoBonus).toBe(echoViaOldDivision);
+    }
   });
 });
 
@@ -235,7 +259,7 @@ describe("El Espejo Inestable (unstable_mirror) - Ante 1", () => {
     const bd1 = scoreWithBoss(handA, [], gs1, true, false);
     expect(bd1.handName).toBe("Pareja");
 
-    const state2 = advanceBossState(gs1, bd1, true, false);
+    const state2 = advanceBossState(gs1, handA, [], bd1, true, false);
     expect(state2).toEqual({ lastHandName: "Pareja" });
 
     const gs2 = baseGs({ activeBossId: "unstable_mirror", bossState: state2 });
@@ -253,7 +277,7 @@ describe("El Espejo Inestable (unstable_mirror) - Ante 1", () => {
     const handB = [card({ rank: 9 })]; // Carta alta
     const gs1 = baseGs({ activeBossId: "unstable_mirror", bossState: { lastHandName: null } });
     const bd1 = scoreWithBoss(handA, [], gs1, true, false);
-    const state2 = advanceBossState(gs1, bd1, true, false);
+    const state2 = advanceBossState(gs1, handA, [], bd1, true, false);
     const gs2 = baseGs({ activeBossId: "unstable_mirror", bossState: state2 });
 
     const withBoss = scoreWithBoss(handB, [], gs2, false, false);
@@ -266,7 +290,7 @@ describe("El Espejo Inestable (unstable_mirror) - Ante 1", () => {
     const handB = [card({ rank: 8 }), card({ rank: 8 })];
     const gs1 = baseGs({ activeBossId: "unstable_mirror", bossState: { lastHandName: null } });
     const bd1 = scoreWithBoss(handA, [], gs1, true, false);
-    const state2 = advanceBossState(gs1, bd1, true, false);
+    const state2 = advanceBossState(gs1, handA, [], bd1, true, false);
     const gs2 = baseGs({ activeBossId: "unstable_mirror", bossState: state2 });
 
     const stateBefore = structuredClone(gs2.bossState);
@@ -296,7 +320,7 @@ describe("El Contable Implacable (the_accountant) - Ante 2", () => {
     const handA = [card({ rank: 10 }), card({ rank: 10 }), card({ rank: 10 })]; // Trío, alto total
     const gs1 = baseGs({ activeBossId: "the_accountant", bossState: { previousTotal: null } });
     const bd1 = scoreWithBoss(handA, [], gs1, true, false);
-    const state2 = advanceBossState(gs1, bd1, true, false);
+    const state2 = advanceBossState(gs1, handA, [], bd1, true, false);
     expect(state2).toEqual({ previousTotal: bd1.total });
 
     const handB = [card({ rank: 3 })]; // Carta alta, total bajo
@@ -314,7 +338,7 @@ describe("El Contable Implacable (the_accountant) - Ante 2", () => {
     const handA = [card({ rank: 3 })]; // Carta alta, total bajo
     const gs1 = baseGs({ activeBossId: "the_accountant", bossState: { previousTotal: null } });
     const bd1 = scoreWithBoss(handA, [], gs1, true, false);
-    const state2 = advanceBossState(gs1, bd1, true, false);
+    const state2 = advanceBossState(gs1, handA, [], bd1, true, false);
 
     const handB = [card({ rank: 10 }), card({ rank: 10 }), card({ rank: 10 })]; // Trío, total alto
     const gs2 = baseGs({ activeBossId: "the_accountant", bossState: state2 });
@@ -350,7 +374,7 @@ describe("El Trono Partido (split_throne) - Ante 3 (final)", () => {
     const withoutBoss = scorePlay(played, [], gs, false, false);
     expect(withBoss).toEqual(withoutBoss);
 
-    const newState = advanceBossState(gs, withBoss, false, false);
+    const newState = advanceBossState(gs, played, [], withBoss, false, false);
     expect(newState).toEqual({ phase: 2 });
   });
 
@@ -363,7 +387,7 @@ describe("El Trono Partido (split_throne) - Ante 3 (final)", () => {
       scoreThisRound: 0,
     });
     const bd = scoreWithBoss(played, [], gs, false, false);
-    const newState = advanceBossState(gs, bd, false, false);
+    const newState = advanceBossState(gs, played, [], bd, false, false);
     expect(newState).toEqual({ phase: 1 });
   });
 
@@ -393,7 +417,7 @@ describe("El Trono Partido (split_throne) - Ante 3 (final)", () => {
       scoreThisRound: 500, // muy por encima del objetivo, no debería importar
     });
     const bd = scoreWithBoss(played, [], gs, false, false);
-    const newState = advanceBossState(gs, bd, false, false);
+    const newState = advanceBossState(gs, played, [], bd, false, false);
     expect(newState).toEqual({ phase: 2 });
   });
 

@@ -1259,7 +1259,7 @@ function PlayScreen({
       handsLeft: gs.handsLeft - 1,
       scoreThisRound: gs.scoreThisRound + bd.total,
       money: gs.money + moneyGain,
-      bossState: advanceBossState(gs, bd, isFirstHand, isLastHand),
+      bossState: advanceBossState(gs, played, held, bd, isFirstHand, isLastHand),
       history: [
         { hand: bd.handName, score: bd.total, round: gs.round },
         ...gs.history,
