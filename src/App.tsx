@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { RelicBadge, RelicCardArt } from "./relicIcons";
 import type {
   Suit,
@@ -55,6 +55,24 @@ import {
   OATH_I_VEIL_OF_THE_THRONE,
 } from "./game/oaths";
 import { applyStartVariant, VARIANT_EMPTY_POCKETS } from "./game/variants";
+import {
+  RUN_SAVE_VERSION,
+  isSaveableScreen,
+  emptyRunProgressCounters,
+  loadRunSave,
+  saveRunSave,
+  deleteRunSave,
+} from "./game/runSave";
+import type {
+  RunSave,
+  RunProgressCounters,
+  PendingRewardSave,
+  PendingShopSave,
+  PendingRelicReplaceSave,
+  PendingLegacySave,
+  WinStep,
+  LoadRunSaveResult,
+} from "./game/runSave";
 import { phaseForRound } from "./game/progression";
 import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, SHOP_SPECIAL_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION, REWARD_REROLL_COSTS, REWARD_REROLL_MAX, SHOP_REROLL_COSTS, SHOP_REROLL_MAX, BANISH_MAX, BANISH_COSTS, SYNERGY_MIN_AFFINITY } from "./game/config";
 import { pickRelicOffer } from "./game/offers";
@@ -667,6 +685,9 @@ function MenuScreen({
   lastSeed,
   unlockedOathIds,
   unlockedVariantIds,
+  runSaveState,
+  onContinue,
+  onDeleteCorruptSave,
 }: {
   onStart: (
     seed: number,
@@ -677,16 +698,60 @@ function MenuScreen({
   lastSeed: number | null;
   unlockedOathIds: ReadonlySet<string>;
   unlockedVariantIds: ReadonlySet<string>;
+  /** Save de run activa detectado al cargar — sección 3 (docs/PERSISTENCE_2F.md). */
+  runSaveState: LoadRunSaveResult;
+  onContinue: () => void;
+  onDeleteCorruptSave: () => void;
 }) {
   const [seedInput, setSeedInput] = useState("");
   const [showHelp, setShowHelp] = useState(false);
   const [oathOn, setOathOn] = useState(false);
   const [variantOn, setVariantOn] = useState(false);
+  const [corruptDismissed, setCorruptDismissed] = useState(false);
+  // Pulsar "Nueva partida"/"Endless"/"Jugar" con una run guardada exige
+  // confirmación antes de reemplazarla (sección 3) — `pendingStart`
+  // guarda la acción real hasta que el jugador confirma o cancela.
+  const [pendingStart, setPendingStart] = useState<(() => void) | null>(null);
   const oathUnlocked = unlockedOathIds.has(OATH_I_VEIL_OF_THE_THRONE);
   const chosenOathId = oathOn && oathUnlocked ? OATH_I_VEIL_OF_THE_THRONE : null;
   const variantUnlocked = unlockedVariantIds.has(VARIANT_EMPTY_POCKETS);
   const chosenVariantId =
     variantOn && variantUnlocked ? VARIANT_EMPTY_POCKETS : null;
+  const hasActiveSave = runSaveState.status === "valid";
+  const activeSave = runSaveState.status === "valid" ? runSaveState.save : null;
+
+  const requestStart = (action: () => void) => {
+    if (hasActiveSave) setPendingStart(() => action);
+    else action();
+  };
+
+  // Save corrupto (sección 6): se muestra en vez del menú normal hasta
+  // que el jugador elige explícitamente qué hacer. No modifica
+  // PlayerProfile en ningún caso.
+  if (runSaveState.status === "corrupt" && !corruptDismissed) {
+    return (
+      <div className="flex min-h-[80vh] flex-col items-center justify-center gap-5 px-4 text-center">
+        <p className="rc-eyebrow text-rose-300">Partida guardada</p>
+        <h2 className="rc-title text-2xl">
+          La partida guardada no puede recuperarse.
+        </h2>
+        <div className="flex gap-3">
+          <button
+            onClick={onDeleteCorruptSave}
+            className="rc-btn rc-btn-flat px-5 py-3"
+          >
+            Eliminar partida guardada
+          </button>
+          <button
+            onClick={() => setCorruptDismissed(true)}
+            className="rc-btn rc-btn-ghost px-5 py-3"
+          >
+            Volver al menú
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[80vh] flex-col items-center justify-center gap-7 px-4 text-center">
@@ -712,9 +777,32 @@ function MenuScreen({
       </div>
 
       <div className="flex w-full max-w-sm flex-col gap-3">
+        {/* Continuar run activa — sección 3 (docs/PERSISTENCE_2F.md).
+            Componente provisional, sin rediseño de menú. */}
+        {activeSave && (
+          <div className="rc-panel rc-panel__corners p-3 text-left">
+            <p className="rc-eyebrow mb-1 text-cyan-300">Partida en curso</p>
+            <p className="mb-2 text-xs text-slate-400">
+              Ronda {activeSave.gameState.round} · Ante {activeSave.gameState.ante} ·{" "}
+              ${activeSave.gameState.money} · {activeSave.gameState.relics.length}/
+              {MAX_ACTIVE_RELICS} modificadores
+              <br />
+              semilla {activeSave.gameState.seed} ·{" "}
+              {new Date(activeSave.savedAt).toLocaleString()}
+            </p>
+            <button
+              onClick={onContinue}
+              className="rc-btn rc-btn-primary w-full py-3 text-base"
+            >
+              ▶ CONTINUAR
+            </button>
+          </div>
+        )}
         <button
           onClick={() =>
-            onStart((Math.random() * 1e9) | 0, false, chosenOathId, chosenVariantId)
+            requestStart(() =>
+              onStart((Math.random() * 1e9) | 0, false, chosenOathId, chosenVariantId)
+            )
           }
           className="rc-btn rc-btn-primary px-6 py-4 text-lg"
         >
@@ -728,7 +816,9 @@ function MenuScreen({
         </button>
         <button
           onClick={() =>
-            onStart((Math.random() * 1e9) | 0, true, chosenOathId, chosenVariantId)
+            requestStart(() =>
+              onStart((Math.random() * 1e9) | 0, true, chosenOathId, chosenVariantId)
+            )
           }
           className="rc-btn rc-btn-ghost--magenta px-6 py-3"
         >
@@ -746,11 +836,13 @@ function MenuScreen({
           />
           <button
             onClick={() =>
-              onStart(
-                seedInput ? parseInt(seedInput, 10) : (Math.random() * 1e9) | 0,
-                false,
-                chosenOathId,
-                chosenVariantId
+              requestStart(() =>
+                onStart(
+                  seedInput ? parseInt(seedInput, 10) : (Math.random() * 1e9) | 0,
+                  false,
+                  chosenOathId,
+                  chosenVariantId
+                )
               )
             }
             className="rc-btn rc-btn-flat px-4 py-2 text-sm"
@@ -797,6 +889,35 @@ function MenuScreen({
       </div>
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+
+      {pendingStart && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,7,20,0.92)] p-4 backdrop-blur-sm">
+          <div className="rc-panel rc-panel__corners w-full max-w-sm p-5 text-center">
+            <p className="mb-4 text-sm text-slate-300">
+              Tienes una partida guardada en curso. Empezar una nueva la
+              eliminará. ¿Seguro?
+            </p>
+            <div className="flex justify-center gap-3">
+              <button
+                onClick={() => {
+                  const action = pendingStart;
+                  setPendingStart(null);
+                  action();
+                }}
+                className="rc-btn rc-btn-primary px-4 py-2 text-sm"
+              >
+                Sí, empezar de nuevo
+              </button>
+              <button
+                onClick={() => setPendingStart(null)}
+                className="rc-btn rc-btn-flat px-4 py-2 text-sm"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -906,6 +1027,7 @@ function PlayScreen({
   onDefeat,
   spawnParticles,
   unlockedBossIds,
+  onDiscard,
 }: {
   gs: GameState;
   setGs: (g: GameState) => void;
@@ -913,6 +1035,8 @@ function PlayScreen({
   onDefeat: (g: GameState) => void;
   spawnParticles: (x: number, y: number, n: number, big: boolean) => void;
   unlockedBossIds: ReadonlySet<string>;
+  /** Estadísticas de perfil (docs/PERSISTENCE_2F.md, sección 10) — se cuenta un descarte real. */
+  onDiscard: () => void;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [lastScore, setLastScore] = useState<ScoreBreakdown | null>(null);
@@ -1096,6 +1220,7 @@ function PlayScreen({
     g = drawTo(g);
     setSelected([]);
     setGs(g);
+    onDiscard();
   };
 
   const progress = Math.min(100, (gs.scoreThisRound / gs.target) * 100);
@@ -1510,6 +1635,9 @@ function RewardScreen({
   onSkip,
   onRerollSpend,
   onBanish,
+  initialOffers,
+  initialRerollCount,
+  onOfferChange,
 }: {
   gs: GameState;
   rng: Rng;
@@ -1517,11 +1645,16 @@ function RewardScreen({
   onSkip: () => void;
   onRerollSpend: (cost: number) => void;
   onBanish: (relicId: string) => void;
+  /** Al restaurar un save con esta pantalla pendiente (docs/PERSISTENCE_2F.md). */
+  initialOffers?: Relic[];
+  initialRerollCount?: number;
+  onOfferChange: (offers: Relic[], rerollCount: number) => void;
 }) {
   const excludeIds = () =>
     new Set([...gs.relics.map((r) => r.id), ...gs.banishedRelicIds]);
 
   const [offers, setOffers] = useState<Relic[]>(() => {
+    if (initialOffers) return initialOffers;
     const weights = REWARD_WEIGHTS[phaseForRound(gs.round)];
     const initial = pickRelicOffer(
       rng,
@@ -1534,7 +1667,17 @@ function RewardScreen({
     logRelicOfferDebug(gs, { context: "reward", offers: initial, rerollsUsed: 0 });
     return initial;
   });
-  const [rerollCount, setRerollCount] = useState(0);
+  const [rerollCount, setRerollCount] = useState(initialRerollCount ?? 0);
+
+  // Reporta la oferta actual a App.tsx para el autosave — solo en el
+  // montaje inicial; los cambios posteriores (reroll, destierro) se
+  // reportan explícitamente en sus propios handlers, con el valor ya
+  // calculado (evita depender de un `offers`/`rerollCount` que
+  // todavía no se ha re-renderizado).
+  useEffect(() => {
+    onOfferChange(offers, rerollCount);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const rerollAllowed = canReroll(
     rerollCount,
@@ -1565,11 +1708,14 @@ function RewardScreen({
     });
     setOffers(rerolled);
     setRerollCount((c) => c + 1);
+    onOfferChange(rerolled, rerollCount + 1);
   };
 
   const handleBanishOffer = (relicId: string) => {
     onBanish(relicId);
-    setOffers((os) => os.filter((r) => r.id !== relicId));
+    const next = offers.filter((r) => r.id !== relicId);
+    setOffers(next);
+    onOfferChange(next, rerollCount);
   };
 
   return (
@@ -1683,6 +1829,11 @@ function MoneyRewardScreen({
 }
 
 /* ---------------- Pantalla: Tienda ---------------- */
+type ShopStock = {
+  relics: { relic: Relic; price: number }[];
+  specials: ShopSpecial[];
+};
+
 function ShopScreen({
   gs,
   rng,
@@ -1692,6 +1843,10 @@ function ShopScreen({
   onContinue,
   onRerollSpend,
   onBanish,
+  initialStock,
+  initialUsedSpecialKinds,
+  initialRerollCount,
+  onStockChange,
 }: {
   gs: GameState;
   rng: Rng;
@@ -1701,6 +1856,15 @@ function ShopScreen({
   onContinue: () => void;
   onRerollSpend: (cost: number) => void;
   onBanish: (relicId: string) => void;
+  /** Al restaurar un save con esta pantalla pendiente (docs/PERSISTENCE_2F.md). */
+  initialStock?: ShopStock;
+  initialUsedSpecialKinds?: SpecialCardKind[];
+  initialRerollCount?: number;
+  onStockChange: (
+    stock: ShopStock,
+    usedSpecialKinds: SpecialCardKind[],
+    rerollCount: number
+  ) => void;
 }) {
   const [pendingSpecial, setPendingSpecial] = useState<ShopSpecial | null>(
     null
@@ -1713,13 +1877,13 @@ function ShopScreen({
   // realizadas no reaparecen automáticamente" (sección 4 del encargo).
   const [usedSpecialKinds, setUsedSpecialKinds] = useState<
     Set<SpecialCardKind>
-  >(new Set());
-  const [shopRerollCount, setShopRerollCount] = useState(0);
+  >(new Set(initialUsedSpecialKinds ?? []));
+  const [shopRerollCount, setShopRerollCount] = useState(initialRerollCount ?? 0);
 
   const generateStock = (
     excludeSpecialKinds: Set<SpecialCardKind>,
     rerollsUsed = 0
-  ) => {
+  ): ShopStock => {
     const excludeRelicIds = new Set([
       ...gs.relics.map((r) => r.id),
       ...gs.banishedRelicIds,
@@ -1748,7 +1912,17 @@ function ShopScreen({
     };
   };
 
-  const [stock, setStock] = useState(() => generateStock(new Set()));
+  const [stock, setStock] = useState<ShopStock>(
+    () => initialStock ?? generateStock(new Set())
+  );
+
+  // Reporta el stock actual a App.tsx para el autosave — solo en el
+  // montaje inicial; los cambios posteriores se reportan explícitamente
+  // en sus propios handlers (mismo patrón que RewardScreen).
+  useEffect(() => {
+    onStockChange(stock, [...usedSpecialKinds], shopRerollCount);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const shopRerollAllowed = canReroll(
     shopRerollCount,
@@ -1760,17 +1934,21 @@ function ShopScreen({
 
   const handleBanishOffer = (relicId: string) => {
     onBanish(relicId);
-    setStock((s) => ({
-      ...s,
-      relics: s.relics.filter(({ relic }) => relic.id !== relicId),
-    }));
+    const next = {
+      ...stock,
+      relics: stock.relics.filter(({ relic }) => relic.id !== relicId),
+    };
+    setStock(next);
+    onStockChange(next, [...usedSpecialKinds], shopRerollCount);
   };
 
   const handleShopReroll = () => {
     if (!shopRerollAllowed) return;
     onRerollSpend(nextShopRerollCost);
-    setStock(generateStock(usedSpecialKinds, shopRerollCount + 1));
+    const next = generateStock(usedSpecialKinds, shopRerollCount + 1);
+    setStock(next);
     setShopRerollCount((c) => c + 1);
+    onStockChange(next, [...usedSpecialKinds], shopRerollCount + 1);
   };
 
   return (
@@ -1996,9 +2174,11 @@ function ShopScreen({
                           ? convSuit
                           : undefined
                       );
-                      setUsedSpecialKinds(
-                        (u) => new Set(u).add(pendingSpecial.kind)
+                      const nextUsed = new Set(usedSpecialKinds).add(
+                        pendingSpecial.kind
                       );
+                      setUsedSpecialKinds(nextUsed);
+                      onStockChange(stock, [...nextUsed], shopRerollCount);
                       setPendingSpecial(null);
                     }}
                   />
@@ -2161,6 +2341,9 @@ function WinScreen({
   onContinueEndless,
   onNewRun,
   onMenu,
+  initialStep,
+  initialClaimedId,
+  onStepChange,
 }: {
   gs: GameState;
   profile: PlayerProfile;
@@ -2168,9 +2351,22 @@ function WinScreen({
   onContinueEndless: () => void;
   onNewRun: () => void;
   onMenu: () => void;
+  /** Al restaurar un save con Coronación pendiente (docs/PERSISTENCE_2F.md). */
+  initialStep?: WinStep;
+  initialClaimedId?: string | null;
+  onStepChange: (step: WinStep, claimedId: string | null) => void;
 }) {
-  const [step, setStep] = useState<"summary" | "legacy" | "confirm">("summary");
-  const [claimedId, setClaimedId] = useState<string | null>(null);
+  const [step, setStep] = useState<WinStep>(initialStep ?? "summary");
+  const [claimedId, setClaimedId] = useState<string | null>(initialClaimedId ?? null);
+
+  // Reporta el paso actual a App.tsx para el autosave — la oferta de
+  // Legados en sí NO se reporta (se recalcula determinista al
+  // restaurar, ver runSave.ts). Deps vacías: el mount inicial ya
+  // coincide con initialStep/initialClaimedId, no hace falta re-avisar.
+  useEffect(() => {
+    onStepChange(step, claimedId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, claimedId]);
 
   const finalBoss = gs.activeBossId ? getBossById(gs.activeBossId) : null;
   const oath = getOathById(gs.oathId);
@@ -2395,11 +2591,8 @@ export default function App() {
   const [gs, setGs] = useState<GameState | null>(null);
   const [lastSeed, setLastSeed] = useState<number | null>(null);
   const [particles, setParticles] = useState<Particle[]>([]);
-  const [pendingRelicReplace, setPendingRelicReplace] = useState<{
-    incoming: Relic;
-    context: "reward" | "shop";
-    price?: number;
-  } | null>(null);
+  const [pendingRelicReplace, setPendingRelicReplace] =
+    useState<PendingRelicReplaceSave | null>(null);
   // Perfil de progresión persistente — Iteración 2E
   // (docs/METAPROGRESSION_2E.md). Independiente de `gs`: sobrevive a
   // partidas perdidas, a cerrar la pestaña, a "Nueva partida".
@@ -2409,6 +2602,56 @@ export default function App() {
   const unlockedVariantIds = useMemo(() => getUnlockedVariantIds(profile), [profile]);
   const rewardRng = useRef<Rng>(makeRng(1));
   const shopRng = useRef<Rng>(makeRng(1));
+
+  // Persistencia de run activa — Iteración 2F (docs/PERSISTENCE_2F.md).
+  // `runSaveState` se carga UNA vez al montar (no se vuelve a leer de
+  // localStorage salvo que el propio usuario borre/continúe/reemplace
+  // el save) y separa explícitamente "no hay save" / "save válido" /
+  // "save corrupto" para que MenuScreen pueda mostrar cada caso.
+  const [runSaveState, setRunSaveState] = useState<LoadRunSaveResult>(() =>
+    loadRunSave()
+  );
+  const [runProgress, setRunProgress] = useState<RunProgressCounters>(
+    emptyRunProgressCounters()
+  );
+  const [pendingReward, setPendingReward] = useState<PendingRewardSave | null>(
+    null
+  );
+  const [pendingShop, setPendingShop] = useState<PendingShopSave | null>(null);
+  const [pendingLegacy, setPendingLegacy] = useState<PendingLegacySave | null>(
+    null
+  );
+
+  // Autosave — sección 2 del encargo. Se dispara tras CUALQUIER
+  // transición real (cambia `gs` o `screen`), nunca durante animaciones
+  // puramente visuales: los efectos cosméticos de PlayScreen
+  // (floatScore, shake, particles, scoringIds) viven como estado local
+  // de ese componente, nunca tocan `gs`, así que no disparan este
+  // efecto. Solo escribe en pantallas guardables (`isSaveableScreen`) —
+  // en "menu" o "defeat" no hay run activa que guardar.
+  useEffect(() => {
+    if (!gs || !isSaveableScreen(screen)) return;
+    const save: RunSave = {
+      version: RUN_SAVE_VERSION,
+      savedAt: new Date().toISOString(),
+      screen,
+      gameState: gs,
+      runProgress,
+      pendingReward: screen === "reward" ? pendingReward : null,
+      pendingShop: screen === "shop" ? pendingShop : null,
+      pendingRelicReplace,
+      pendingLegacy: screen === "win" ? pendingLegacy : null,
+    };
+    saveRunSave(save);
+  }, [
+    gs,
+    screen,
+    runProgress,
+    pendingReward,
+    pendingShop,
+    pendingRelicReplace,
+    pendingLegacy,
+  ]);
 
   const spawnParticles = useCallback(
     (x: number, y: number, n: number, big: boolean) => {
@@ -2479,6 +2722,16 @@ export default function App() {
     const startedProfile = recordRunStart(profile);
     setProfile(startedProfile);
     saveProfile(startedProfile);
+    // Nueva run: cualquier save anterior (jugado hasta el final o no)
+    // deja de ser la run activa. MenuScreen ya pidió confirmación si
+    // hacía falta (docs/PERSISTENCE_2F.md, sección "Fin de run").
+    deleteRunSave();
+    setRunSaveState({ status: "none" });
+    setRunProgress(emptyRunProgressCounters());
+    setPendingReward(null);
+    setPendingShop(null);
+    setPendingLegacy(null);
+    setPendingRelicReplace(null);
     const deck = buildStartingDeck();
     const base: GameState = applyStartVariant(
       {
@@ -2557,6 +2810,8 @@ export default function App() {
    *  una sola vez si tocaba tienda/victoria antes de llegar aquí. */
   const advanceToNextRound = (g: GameState) => {
     const { nextRound } = resolveAfterShop(g.round);
+    setPendingReward(null);
+    setPendingShop(null);
     setGs(startRound(g, nextRound, unlockedBossIds));
     setScreen("play");
   };
@@ -2577,6 +2832,7 @@ export default function App() {
   const handleRewardRerollSpend = (cost: number) => {
     if (!gs) return;
     setGs({ ...gs, money: gs.money - cost });
+    setRunProgress((p) => ({ ...p, rerollsUsed: p.rerollsUsed + 1 }));
   };
 
   const handleMoneyRewardContinue = () => {
@@ -2593,6 +2849,7 @@ export default function App() {
     };
     if (context === "shop" && price != null) {
       g = { ...g, money: g.money - price };
+      setRunProgress((p) => ({ ...p, shopPurchases: p.shopPurchases + 1 }));
     }
     setPendingRelicReplace(null);
     if (context === "reward") {
@@ -2611,6 +2868,7 @@ export default function App() {
   const handleShopRerollSpend = (cost: number) => {
     if (!gs) return;
     setGs({ ...gs, money: gs.money - cost });
+    setRunProgress((p) => ({ ...p, rerollsUsed: p.rerollsUsed + 1 }));
   };
 
   /**
@@ -2636,6 +2894,7 @@ export default function App() {
     if (!gs || gs.money < price) return;
     if (hasRelicCapacity(gs.relics, MAX_ACTIVE_RELICS)) {
       setGs({ ...gs, money: gs.money - price, relics: [...gs.relics, r] });
+      setRunProgress((p) => ({ ...p, shopPurchases: p.shopPurchases + 1 }));
     } else {
       setPendingRelicReplace({ incoming: r, context: "shop", price });
     }
@@ -2658,6 +2917,7 @@ export default function App() {
       return nc;
     });
     setGs({ ...gs, money: gs.money - sp.price, deck });
+    setRunProgress((p) => ({ ...p, shopPurchases: p.shopPurchases + 1 }));
   };
 
   const handleSellCard = (cardId: string) => {
@@ -2676,7 +2936,10 @@ export default function App() {
     const nextProfile = markLastCoronationEndless(profile);
     setProfile(nextProfile);
     saveProfile(nextProfile);
+    setPendingLegacy(null);
     const { round, endless } = beginEndlessContinuation(gs.round);
+    // Convierte el MISMO save al estado Endless (sección 9) — sigue
+    // siendo la única clave de storage, nunca se crea un save nuevo.
     setGs(startRound({ ...gs, endless }, round, unlockedBossIds));
     setScreen("play");
   };
@@ -2688,9 +2951,62 @@ export default function App() {
     saveProfile(nextProfile);
   };
 
+  /** Reporta el paso del flujo de Coronación para el autosave (sección 8: "Legado pendiente" debe sobrevivir a un cierre). */
+  const handleWinStepChange = (step: WinStep, claimedLegacyId: string | null) => {
+    setPendingLegacy({ step, claimedLegacyId });
+  };
+
   /** "Nueva run" desde la pantalla de Coronación: arranca de inmediato con una seed nueva, condiciones por defecto. */
   const handleNewRunFromWin = () => {
     newGame((Math.random() * 1e9) | 0, false);
+  };
+
+  /** Vuelve al menú tras una Coronación resuelta - fin de run real, se elimina el save (sección 8). */
+  const handleMenuFromWin = () => {
+    deleteRunSave();
+    setRunSaveState({ status: "none" });
+    setScreen("menu");
+  };
+
+  /**
+   * Continuar una run guardada (sección 3-4). Restauración = hidratar
+   * estado ya resuelto, NUNCA volver a ejecutar un handler de
+   * transición (`handleWinRound`, `recordCoronation`, `claimLegacy`...)
+   * — así ninguna recompensa/Coronación/Legado puede duplicarse al
+   * restaurar (sección 5, idempotencia). Los streams de reward/shop se
+   * re-siembran de forma determinista pero no continúan exactamente la
+   * secuencia previa al cierre — ver runSave.ts y
+   * docs/PERSISTENCE_2F.md.
+   */
+  const handleContinueRun = () => {
+    if (runSaveState.status !== "valid") return;
+    const { save } = runSaveState;
+    setLastSeed(save.gameState.seed);
+    rewardRng.current = makeRng(
+      save.gameState.seed +
+        555 +
+        save.gameState.round * 31 +
+        (save.pendingReward?.rerollCount ?? 0) * 7
+    );
+    shopRng.current = makeRng(
+      save.gameState.seed +
+        save.gameState.round * 31337 +
+        (save.pendingShop?.rerollCount ?? 0) * 13
+    );
+    setRunProgress(save.runProgress);
+    setPendingReward(save.pendingReward);
+    setPendingShop(save.pendingShop);
+    setPendingRelicReplace(save.pendingRelicReplace);
+    setPendingLegacy(save.pendingLegacy);
+    setParticles([]);
+    setGs(save.gameState);
+    setScreen(save.screen);
+  };
+
+  /** Save corrupto (sección 6): se elimina explícitamente, nunca se toca PlayerProfile. */
+  const handleDeleteCorruptSave = () => {
+    deleteRunSave();
+    setRunSaveState({ status: "none" });
   };
 
   return (
@@ -2774,6 +3090,9 @@ export default function App() {
             lastSeed={lastSeed}
             unlockedOathIds={unlockedOathIds}
             unlockedVariantIds={unlockedVariantIds}
+            runSaveState={runSaveState}
+            onContinue={handleContinueRun}
+            onDeleteCorruptSave={handleDeleteCorruptSave}
           />
         )}
 
@@ -2784,7 +3103,14 @@ export default function App() {
             spawnParticles={spawnParticles}
             onWinRound={handleWinRound}
             unlockedBossIds={unlockedBossIds}
+            onDiscard={() =>
+              setRunProgress((p) => ({ ...p, discardsUsed: p.discardsUsed + 1 }))
+            }
             onDefeat={(g) => {
+              // Derrota definitiva (sección 8): se elimina el save de
+              // inmediato, no queda nada que "continuar".
+              deleteRunSave();
+              setRunSaveState({ status: "none" });
               setGs(g);
               setScreen("defeat");
             }}
@@ -2799,6 +3125,11 @@ export default function App() {
             onSkip={handleSkipReward}
             onRerollSpend={handleRewardRerollSpend}
             onBanish={handleBanish}
+            initialOffers={pendingReward?.offers}
+            initialRerollCount={pendingReward?.rerollCount}
+            onOfferChange={(offers, rerollCount) =>
+              setPendingReward({ offers, rerollCount })
+            }
           />
         )}
 
@@ -2816,6 +3147,12 @@ export default function App() {
             onContinue={handleContinueFromShop}
             onRerollSpend={handleShopRerollSpend}
             onBanish={handleBanish}
+            initialStock={pendingShop?.stock}
+            initialUsedSpecialKinds={pendingShop?.usedSpecialKinds}
+            initialRerollCount={pendingShop?.rerollCount}
+            onStockChange={(stock, usedSpecialKinds, rerollCount) =>
+              setPendingShop({ stock, usedSpecialKinds, rerollCount })
+            }
           />
         )}
 
@@ -2834,7 +3171,10 @@ export default function App() {
             onClaimLegacy={handleClaimLegacy}
             onContinueEndless={handleContinueEndless}
             onNewRun={handleNewRunFromWin}
-            onMenu={() => setScreen("menu")}
+            onMenu={handleMenuFromWin}
+            initialStep={pendingLegacy?.step}
+            initialClaimedId={pendingLegacy?.claimedLegacyId}
+            onStepChange={handleWinStepChange}
           />
         )}
 
