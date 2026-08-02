@@ -32,12 +32,17 @@ import {
 } from "./game/bosses";
 import { loadProfile, saveProfile, recordRunStart } from "./game/profile";
 import type { PlayerProfile } from "./game/profile";
-import { getUnlockedBossIds, getUnlockedOathIds } from "./game/legacies";
+import {
+  getUnlockedBossIds,
+  getUnlockedOathIds,
+  getUnlockedVariantIds,
+} from "./game/legacies";
 import {
   getOathById,
   shouldShowBossTelegraph,
   OATH_I_VEIL_OF_THE_THRONE,
 } from "./game/oaths";
+import { applyStartVariant, VARIANT_EMPTY_POCKETS } from "./game/variants";
 import { phaseForRound } from "./game/progression";
 import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, SHOP_SPECIAL_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION, REWARD_REROLL_COSTS, REWARD_REROLL_MAX, SHOP_REROLL_COSTS, SHOP_REROLL_MAX, BANISH_MAX, BANISH_COSTS, SYNERGY_MIN_AFFINITY } from "./game/config";
 import { pickRelicOffer } from "./game/offers";
@@ -649,16 +654,27 @@ function MenuScreen({
   onStart,
   lastSeed,
   unlockedOathIds,
+  unlockedVariantIds,
 }: {
-  onStart: (seed: number, endless: boolean, oathId: string | null) => void;
+  onStart: (
+    seed: number,
+    endless: boolean,
+    oathId: string | null,
+    variantId: string | null
+  ) => void;
   lastSeed: number | null;
   unlockedOathIds: ReadonlySet<string>;
+  unlockedVariantIds: ReadonlySet<string>;
 }) {
   const [seedInput, setSeedInput] = useState("");
   const [showHelp, setShowHelp] = useState(false);
   const [oathOn, setOathOn] = useState(false);
+  const [variantOn, setVariantOn] = useState(false);
   const oathUnlocked = unlockedOathIds.has(OATH_I_VEIL_OF_THE_THRONE);
   const chosenOathId = oathOn && oathUnlocked ? OATH_I_VEIL_OF_THE_THRONE : null;
+  const variantUnlocked = unlockedVariantIds.has(VARIANT_EMPTY_POCKETS);
+  const chosenVariantId =
+    variantOn && variantUnlocked ? VARIANT_EMPTY_POCKETS : null;
 
   return (
     <div className="flex min-h-[80vh] flex-col items-center justify-center gap-7 px-4 text-center">
@@ -685,7 +701,9 @@ function MenuScreen({
 
       <div className="flex w-full max-w-sm flex-col gap-3">
         <button
-          onClick={() => onStart((Math.random() * 1e9) | 0, false, chosenOathId)}
+          onClick={() =>
+            onStart((Math.random() * 1e9) | 0, false, chosenOathId, chosenVariantId)
+          }
           className="rc-btn rc-btn-primary px-6 py-4 text-lg"
         >
           ▶  Nueva partida
@@ -697,7 +715,9 @@ function MenuScreen({
           ?  Cómo se juega
         </button>
         <button
-          onClick={() => onStart((Math.random() * 1e9) | 0, true, chosenOathId)}
+          onClick={() =>
+            onStart((Math.random() * 1e9) | 0, true, chosenOathId, chosenVariantId)
+          }
           className="rc-btn rc-btn-ghost--magenta px-6 py-3"
         >
           ∞  Modo Endless
@@ -717,7 +737,8 @@ function MenuScreen({
               onStart(
                 seedInput ? parseInt(seedInput, 10) : (Math.random() * 1e9) | 0,
                 false,
-                chosenOathId
+                chosenOathId,
+                chosenVariantId
               )
             }
             className="rc-btn rc-btn-flat px-4 py-2 text-sm"
@@ -729,9 +750,10 @@ function MenuScreen({
           <p className="text-xs text-slate-500">Última semilla: {lastSeed}</p>
         )}
 
-        {/* Selector mínimo de Juramento — Iteración 2E, sección 6. Solo
-            visible una vez desbloqueado el Legado correspondiente;
-            componente provisional, sin rediseño visual. */}
+        {/* Selectores mínimos de Juramento/Variante — Iteración 2E,
+            secciones 6-7. Solo visibles una vez desbloqueado el Legado
+            correspondiente; componentes provisionales, sin rediseño
+            visual. */}
         {oathUnlocked && (
           <label className="mt-1 flex items-center gap-2 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/[0.06] px-3 py-2 text-left text-xs text-slate-300">
             <input
@@ -743,6 +765,20 @@ function MenuScreen({
             <span>
               <strong className="text-fuchsia-300">Juramento: El Velo del Trono</strong>
               {" — "}no verás el próximo boss del ante hasta llegar a su ronda.
+            </span>
+          </label>
+        )}
+        {variantUnlocked && (
+          <label className="flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.06] px-3 py-2 text-left text-xs text-slate-300">
+            <input
+              type="checkbox"
+              checked={variantOn}
+              onChange={(e) => setVariantOn(e.target.checked)}
+              className="accent-cyan-400"
+            />
+            <span>
+              <strong className="text-cyan-300">Variante: Bolsillos Vacíos</strong>
+              {" — "}2$ iniciales en vez de 4$, con un descarte extra por ronda.
             </span>
           </label>
         )}
@@ -2189,6 +2225,7 @@ export default function App() {
   const [profile, setProfile] = useState<PlayerProfile>(() => loadProfile());
   const unlockedBossIds = useMemo(() => getUnlockedBossIds(profile), [profile]);
   const unlockedOathIds = useMemo(() => getUnlockedOathIds(profile), [profile]);
+  const unlockedVariantIds = useMemo(() => getUnlockedVariantIds(profile), [profile]);
   const rewardRng = useRef<Rng>(makeRng(1));
   const shopRng = useRef<Rng>(makeRng(1));
 
@@ -2249,7 +2286,12 @@ export default function App() {
     []
   );
 
-  const newGame = (seed: number, endless: boolean, oathId: string | null = null) => {
+  const newGame = (
+    seed: number,
+    endless: boolean,
+    oathId: string | null = null,
+    variantId: string | null = null
+  ) => {
     setLastSeed(seed);
     // "runs iniciadas" (docs/METAPROGRESSION_2E.md, sección 1) - se
     // cuenta aquí, gane o pierda la run después.
@@ -2257,33 +2299,36 @@ export default function App() {
     setProfile(startedProfile);
     saveProfile(startedProfile);
     const deck = buildStartingDeck();
-    const base: GameState = {
-      seed,
-      round: 1,
-      ante: 1,
-      money: STARTING_MONEY,
-      deck,
-      drawPile: [],
-      hand: [],
-      discardPile: [],
-      relics: [],
-      handsLeft: HANDS_PER_ROUND,
-      discardsLeft: DISCARDS_PER_ROUND,
-      handsPerRound: HANDS_PER_ROUND,
-      discardsPerRound: DISCARDS_PER_ROUND,
-      handSize: HAND_SIZE,
-      scoreThisRound: 0,
-      target: targetForRound(1),
-      discardsUsedThisRound: 0,
-      permaMult: 0,
-      history: [],
-      endless,
-      stats: { handsPlayed: 0, bestHand: 0, totalScore: 0 },
-      banishedRelicIds: [],
-      activeBossId: null,
-      bossState: {},
-      oathId,
-    };
+    const base: GameState = applyStartVariant(
+      {
+        seed,
+        round: 1,
+        ante: 1,
+        money: STARTING_MONEY,
+        deck,
+        drawPile: [],
+        hand: [],
+        discardPile: [],
+        relics: [],
+        handsLeft: HANDS_PER_ROUND,
+        discardsLeft: DISCARDS_PER_ROUND,
+        handsPerRound: HANDS_PER_ROUND,
+        discardsPerRound: DISCARDS_PER_ROUND,
+        handSize: HAND_SIZE,
+        scoreThisRound: 0,
+        target: targetForRound(1),
+        discardsUsedThisRound: 0,
+        permaMult: 0,
+        history: [],
+        endless,
+        stats: { handsPlayed: 0, bestHand: 0, totalScore: 0 },
+        banishedRelicIds: [],
+        activeBossId: null,
+        bossState: {},
+        oathId,
+      },
+      variantId
+    );
     rewardRng.current = makeRng(seed + 555);
     shopRng.current = makeRng(seed + 999);
     setParticles([]);
@@ -2522,6 +2567,7 @@ export default function App() {
             onStart={newGame}
             lastSeed={lastSeed}
             unlockedOathIds={unlockedOathIds}
+            unlockedVariantIds={unlockedVariantIds}
           />
         )}
 
