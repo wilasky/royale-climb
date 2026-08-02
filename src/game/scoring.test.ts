@@ -47,6 +47,7 @@ function baseGs(overrides: Partial<GameState> = {}): GameState {
     banishedRelicIds: [],
     activeBossId: null,
     bossState: {},
+    oathId: null,
     ...overrides,
   };
 }

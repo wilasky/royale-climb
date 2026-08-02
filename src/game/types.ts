@@ -91,6 +91,14 @@ export interface GameState {
    * `BossDefinition`; vacía cuando no hay boss activo.
    */
   bossState: Record<string, unknown>;
+  /**
+   * Juramento elegido antes de empezar esta run — Iteración 2E
+   * (docs/METAPROGRESSION_2E.md). `null` en una run normal. Se fija una
+   * vez en `newGame` y no cambia durante la run; los propios Juramentos
+   * consultan este id donde haga falta (p.ej. ocultar el telegraph de
+   * boss) en vez de dispersar banderas nuevas por `GameState`.
+   */
+  oathId: string | null;
 }
 
 export interface ScoreBreakdown {

@@ -2210,6 +2210,7 @@ export default function App() {
       banishedRelicIds: [],
       activeBossId: null,
       bossState: {},
+      oathId: null,
     };
     rewardRng.current = makeRng(seed + 555);
     shopRng.current = makeRng(seed + 999);
