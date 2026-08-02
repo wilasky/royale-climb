@@ -379,10 +379,10 @@ const RELIC_POOL: Relic[] = [
   { id: "glass_master", name: "Maestro del Vidrio", desc: "Cartas de cristal: x4 en vez de x2 y nunca se rompen.", rarity: "epic", icon: "🔮" },
   { id: "small_hand", name: "Minimalista", desc: "Jugar 1-2 cartas: +50 fichas y +4 Mult.", rarity: "epic", icon: "🤏" },
   { id: "spectrum_boost", name: "Prisma Roto", desc: "Espectro otorga x3 Mult adicional.", rarity: "epic", icon: "🌈" },
-  { id: "even_odd", name: "Equilibrio Par", desc: "Si todas las cartas jugadas son pares: x4 Mult.", rarity: "epic", icon: "⚖️" },
+  { id: "even_odd", name: "Equilibrio Par", desc: "Si todas las cartas jugadas son pares (el As no cuenta): x3 Mult.", rarity: "epic", icon: "⚖️" },
   { id: "blood_pact", name: "Pacto de Sangre", desc: "x2.5 Mult global, pero -1 mano por ronda.", rarity: "legendary", icon: "🩸" },
   { id: "overflow", name: "Desbordamiento", desc: "Si superas el objetivo x2, ganas +8$.", rarity: "legendary", icon: "💥" },
-  { id: "the_collector", name: "El Coleccionista", desc: "+3 Mult por cada modificador que poseas.", rarity: "legendary", icon: "🗃️" },
+  { id: "the_collector", name: "El Coleccionista", desc: "+2 Mult por cada modificador que poseas.", rarity: "legendary", icon: "🗃️" },
   { id: "final_hand", name: "Última Palabra", desc: "Tu última mano de la ronda: x4 Mult.", rarity: "legendary", icon: "🎯" },
 ];
 

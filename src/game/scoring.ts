@@ -162,9 +162,12 @@ export function scorePlay(
     mult += 4;
     lines.push("Minimalista: +50 fichas, +4 Mult");
   }
-  if (has("even_odd") && played.every((c) => c.rank % 2 === 0)) {
-    mult *= 4;
-    lines.push("Equilibrio Par: ×4 Mult");
+  if (
+    has("even_odd") &&
+    played.every((c) => c.rank !== 14 && c.rank % 2 === 0)
+  ) {
+    mult *= 3;
+    lines.push("Equilibrio Par: ×3 Mult");
   }
   if (has("first_hand_mult") && isFirstHand) {
     mult *= 3;
@@ -180,8 +183,8 @@ export function scorePlay(
   }
 
   if (has("the_collector")) {
-    mult += gs.relics.length * 3;
-    lines.push(`El Coleccionista: +${gs.relics.length * 3} Mult`);
+    mult += gs.relics.length * 2;
+    lines.push(`El Coleccionista: +${gs.relics.length * 2} Mult`);
   }
   if (has("blood_pact")) {
     mult *= 2.5;

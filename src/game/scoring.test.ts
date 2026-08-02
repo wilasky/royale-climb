@@ -207,6 +207,56 @@ describe("diamondMoneyPreview", () => {
   });
 });
 
+describe("scorePlay - Equilibrio Par (even_odd)", () => {
+  it("todas las cartas pares sin As: ×3 Mult", () => {
+    const played = [card({ rank: 4 }), card({ rank: 8 })];
+    const gs = baseGs({ relics: [relic("even_odd", "epic")] });
+    const result = scorePlay(played, [], gs, false, false);
+    // Pareja no aplica (rangos distintos): Carta alta, baseMult=1 * 3 = 3.
+    expect(result.mult).toBe(3);
+    expect(result.lines.some((l) => l.includes("Equilibrio Par"))).toBe(true);
+  });
+
+  it("con un As presente ya no se activa (el As deja de contar como par)", () => {
+    const played = [card({ rank: 14 }), card({ rank: 8 })];
+    const gs = baseGs({ relics: [relic("even_odd", "epic")] });
+    const result = scorePlay(played, [], gs, false, false);
+    expect(result.mult).toBe(1);
+    expect(result.lines.some((l) => l.includes("Equilibrio Par"))).toBe(false);
+  });
+
+  it("con una carta impar tampoco se activa", () => {
+    const played = [card({ rank: 4 }), card({ rank: 5 })];
+    const gs = baseGs({ relics: [relic("even_odd", "epic")] });
+    const result = scorePlay(played, [], gs, false, false);
+    expect(result.mult).toBe(1);
+  });
+});
+
+describe("scorePlay - El Coleccionista (the_collector)", () => {
+  it("suma +2 Mult por cada modificador poseído", () => {
+    const played = [card({ rank: 10 })];
+    const relics = [
+      relic("the_collector", "legendary"),
+      relic("spades_chip"),
+      relic("hearts_mult"),
+    ];
+    const result = scorePlay(played, [], baseGs({ relics }), false, false);
+    // baseMult 1 + 3 relics * 2 = 7
+    expect(result.mult).toBe(7);
+    expect(result.lines.some((l) => l.includes("El Coleccionista: +6 Mult"))).toBe(
+      true
+    );
+  });
+
+  it("con un solo modificador (él mismo) suma +2", () => {
+    const played = [card({ rank: 10 })];
+    const gs = baseGs({ relics: [relic("the_collector", "legendary")] });
+    const result = scorePlay(played, [], gs, false, false);
+    expect(result.mult).toBe(3); // 1 + 1*2
+  });
+});
+
 describe("evaluateHand - sigue disponible como utilidad de tipo de mano", () => {
   it("detecta una pareja simple", () => {
     const cards = [card({ rank: 7 }), card({ rank: 7 })];
