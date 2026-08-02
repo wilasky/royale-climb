@@ -154,6 +154,57 @@ const THE_ACCOUNTANT: BossDefinition = {
 };
 
 /**
+ * Ante 3 (final) — El Trono Partido (docs/BOSS_DESIGN_2D.md, sección 2).
+ * Boss de dos fases: hasta cruzar el 50% del objetivo, reglas normales
+ * (Fase 1). La mano que hace cruzar ese umbral puntúa todavía con las
+ * reglas de Fase 1 (sin penalización retroactiva); a partir de la
+ * siguiente mano, cada una suma +40 fichas planas pero su multiplicador
+ * se reduce a ×0.7 (Fase 2) durante el resto de la ronda.
+ */
+const SPLIT_THRONE: BossDefinition = {
+  id: "split_throne",
+  name: "El Trono Partido",
+  ante: 3,
+  shortDescription:
+    "Al superar el 50% del objetivo: +40 fichas pero ×0.7 Mult el resto de la ronda.",
+  description:
+    "El trono se parte en dos en cuanto demuestras que mereces la corona. " +
+    "Hasta la mitad del objetivo, reglas normales. Al cruzarla, cada mano " +
+    "posterior suma +40 fichas planas pero su multiplicador baja a ×0.7 " +
+    "durante el resto de la ronda.",
+  initialState: () => ({ phase: 1 as 1 | 2 }),
+  modifyScore: (breakdown, _ctx, state) => {
+    const phase = state.phase as 1 | 2;
+    if (phase !== 2) return breakdown;
+    const chips = breakdown.chips + 40;
+    const mult = Math.round(breakdown.mult * 0.7 * 10) / 10;
+    const total = Math.round(chips * mult);
+    return {
+      ...breakdown,
+      chips,
+      mult,
+      total,
+      lines: [...breakdown.lines, "El Trono Partido (Fase 2): +40 fichas, ×0.7 Mult"],
+    };
+  },
+  afterHand: (state, ctx, breakdown) => {
+    const phase = state.phase as 1 | 2;
+    if (phase === 2) return state;
+    const cumulative = ctx.gs.scoreThisRound + breakdown.total;
+    if (cumulative >= ctx.gs.target / 2) {
+      return { ...state, phase: 2 as 1 | 2 };
+    }
+    return state;
+  },
+  describeState: (state) => {
+    const phase = state.phase as 1 | 2;
+    return phase === 1
+      ? "Fase 1: reglas normales."
+      : "Fase 2 activa: +40 fichas, ×0.7 Mult por mano.";
+  },
+};
+
+/**
  * Catálogo de bosses por ante. Un ante puede tener varios candidatos —
  * la selección determinista de arriba ya está preparada para eso,
  * aunque en esta iteración cada ante solo tenga uno implementado (los
@@ -163,7 +214,7 @@ const THE_ACCOUNTANT: BossDefinition = {
 export const BOSSES_BY_ANTE: Record<BossAnte, BossDefinition[]> = {
   1: [UNSTABLE_MIRROR],
   2: [THE_ACCOUNTANT],
-  3: [],
+  3: [SPLIT_THRONE],
 };
 
 const ALL_BOSSES: Record<string, BossDefinition> = {};
