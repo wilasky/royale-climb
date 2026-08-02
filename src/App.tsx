@@ -30,12 +30,24 @@ import {
   getBossById,
   describeBossState,
 } from "./game/bosses";
-import { loadProfile, saveProfile, recordRunStart } from "./game/profile";
+import {
+  loadProfile,
+  saveProfile,
+  recordRunStart,
+  recordCoronation,
+  markLastCoronationEndless,
+  defaultProfile,
+} from "./game/profile";
 import type { PlayerProfile } from "./game/profile";
+import { buildCoronationRecord } from "./game/coronation";
 import {
   getUnlockedBossIds,
   getUnlockedOathIds,
   getUnlockedVariantIds,
+  offerLegacies,
+  claimLegacy,
+  getLegacyById,
+  LEGACY_POOL,
 } from "./game/legacies";
 import {
   getOathById,
@@ -2132,76 +2144,245 @@ function DefeatScreen({
 }
 
 /* ---------------- Pantalla: Hito / récord ---------------- */
+/**
+ * Pantalla de Coronación — Iteración 2E (docs/METAPROGRESSION_2E.md,
+ * sección 9). Extiende la antigua pantalla de victoria con un flujo
+ * de 3 pasos: resumen de la Coronación → elegir Legado (si queda
+ * alguno disponible) → confirmación de lo desbloqueado. Los botones
+ * finales (Endless / nueva run / menú) solo aparecen en el último
+ * paso, y "Seguir escalando" sigue funcionando exactamente igual que
+ * antes tras elegir Legado — nunca se pierde la recompensa por elegir
+ * Endless (sección 9 del encargo).
+ */
 function WinScreen({
   gs,
+  profile,
+  onClaimLegacy,
   onContinueEndless,
+  onNewRun,
   onMenu,
 }: {
   gs: GameState;
+  profile: PlayerProfile;
+  onClaimLegacy: (legacyId: string) => void;
   onContinueEndless: () => void;
+  onNewRun: () => void;
   onMenu: () => void;
 }) {
+  const [step, setStep] = useState<"summary" | "legacy" | "confirm">("summary");
+  const [claimedId, setClaimedId] = useState<string | null>(null);
+
+  const finalBoss = gs.activeBossId ? getBossById(gs.activeBossId) : null;
+  const oath = getOathById(gs.oathId);
+  const buildLabels = dominantArchetypes(gs.relics, SYNERGY_MIN_AFFINITY, 2).map(
+    (a) => ARCHETYPE_LABELS[a]
+  );
+  const buildLabel = buildLabels.length > 0 ? buildLabels.join(" · ") : "Sin arquetipo dominante";
+  // Determinista (docs/METAPROGRESSION_2E.md, sección 11): misma seed +
+  // mismo perfil (ya actualizado con esta Coronación) ⇒ misma oferta.
+  const offers = useMemo(() => offerLegacies(profile, gs.seed), [profile, gs.seed]);
+
+  const handleChoose = (legacyId: string) => {
+    onClaimLegacy(legacyId);
+    setClaimedId(legacyId);
+    setStep("confirm");
+  };
+
+  const crownIcon = (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#ffe94d"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-16 w-16 animate-[rcpulse_2s_infinite]"
+      style={{ filter: "drop-shadow(0 0 10px rgba(255,233,77,0.8))" }}
+    >
+      <path d="M7 4h10v5a5 5 0 0 1-10 0Z" />
+      <path d="M7 5H4a3 3 0 0 0 3 5" />
+      <path d="M17 5h3a3 3 0 0 1-3 5" />
+      <path d="M12 14v3" />
+      <path d="M8 20h8" />
+      <path d="M9.5 17h5l1 3h-7Z" />
+    </svg>
+  );
+
+  if (step === "summary") {
+    return (
+      <div className="mx-auto flex min-h-[75vh] max-w-lg flex-col items-center justify-center gap-5 px-4 text-center">
+        {crownIcon}
+        <p className="rc-eyebrow text-amber-300">Coronación completada</p>
+        <h2 className="rc-title text-4xl">Has conquistado esta Ascensión.</h2>
+        {finalBoss && (
+          <p className="text-sm font-semibold text-rose-300">
+            Boss final derrotado: {finalBoss.name}
+          </p>
+        )}
+        <p className="text-slate-400">
+          Has superado las {gs.round} rondas de esta run. Puedes parar aquí, o
+          seguir escalando en Modo Endless desde la ronda {gs.round + 1}.
+        </p>
+        <div className="grid w-full grid-cols-2 gap-2">
+          <StatBox label="Rondas" value={`${gs.round}`} accent="text-amber-300" />
+          <StatBox
+            label="Puntos totales"
+            value={gs.stats.totalScore.toLocaleString()}
+            accent="text-sky-300"
+          />
+          <StatBox
+            label="Mejor jugada"
+            value={gs.stats.bestHand.toLocaleString()}
+            accent="text-rose-300"
+          />
+          <StatBox
+            label="Juramento"
+            value={oath ? oath.name : "Ninguno"}
+            accent="text-fuchsia-300"
+          />
+        </div>
+        <p className="text-xs text-slate-500">Build dominante: {buildLabel}</p>
+        <button
+          onClick={() => setStep("legacy")}
+          className="rc-btn rc-btn-primary px-6 py-3"
+        >
+          {offers.length > 0
+            ? `👑 Elegir Legado (${offers.length} disponible${offers.length > 1 ? "s" : ""})`
+            : "Continuar"}
+        </button>
+      </div>
+    );
+  }
+
+  if (step === "legacy") {
+    return (
+      <div className="mx-auto flex min-h-[75vh] max-w-lg flex-col items-center justify-center gap-5 px-4 text-center">
+        <p className="rc-eyebrow text-amber-300">Legados de la Corona</p>
+        <h2 className="rc-title text-3xl">Elige tu Legado</h2>
+        {offers.length === 0 ? (
+          <>
+            <p className="text-slate-400">
+              Todos los Legados disponibles han sido reclamados.
+            </p>
+            <button
+              onClick={() => setStep("confirm")}
+              className="rc-btn rc-btn-primary px-6 py-3"
+            >
+              Continuar
+            </button>
+          </>
+        ) : (
+          <div className="flex w-full flex-col gap-2">
+            {offers.map((legacy) => (
+              <button
+                key={legacy.id}
+                onClick={() => handleChoose(legacy.id)}
+                className="rc-panel rc-panel__corners p-3 text-left transition-colors hover:border-cyan-400/60"
+              >
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-slate-100">
+                    {legacy.name}
+                  </span>
+                  <span className="rc-eyebrow text-slate-500" style={{ fontSize: "0.6rem" }}>
+                    {legacy.category === "content"
+                      ? "Contenido"
+                      : legacy.category === "playstyle"
+                      ? "Forma de jugar"
+                      : "Desafío"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">{legacy.description}</p>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // step === "confirm"
+  const claimedLegacy = claimedId ? getLegacyById(claimedId) : null;
   return (
     <div className="mx-auto flex min-h-[75vh] max-w-lg flex-col items-center justify-center gap-5 px-4 text-center">
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="#ffe94d"
-        strokeWidth={1.6}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="h-16 w-16 animate-[rcpulse_2s_infinite]"
-        style={{ filter: "drop-shadow(0 0 10px rgba(255,233,77,0.8))" }}
-      >
-        <path d="M7 4h10v5a5 5 0 0 1-10 0Z" />
-        <path d="M7 5H4a3 3 0 0 0 3 5" />
-        <path d="M17 5h3a3 3 0 0 1-3 5" />
-        <path d="M12 14v3" />
-        <path d="M8 20h8" />
-        <path d="M9.5 17h5l1 3h-7Z" />
-      </svg>
-      <h2 className="rc-title text-4xl">¡PARTIDA COMPLETADA!</h2>
-      {gs.activeBossId && getBossById(gs.activeBossId) && (
-        <p className="text-sm font-semibold text-rose-300">
-          Boss final derrotado: {getBossById(gs.activeBossId)!.name}
-        </p>
+      {crownIcon}
+      {claimedLegacy ? (
+        <>
+          <p className="rc-eyebrow text-amber-300">Desbloqueado</p>
+          <h2 className="rc-title text-3xl">{claimedLegacy.name}</h2>
+          <p className="text-slate-400">{claimedLegacy.description}</p>
+        </>
+      ) : (
+        <h2 className="rc-title text-3xl">¡PARTIDA COMPLETADA!</h2>
       )}
-      <p className="text-slate-400">
-        Has superado las {gs.round} rondas de esta run. Puedes parar aquí, o
-        seguir escalando en Modo Endless desde la ronda {gs.round + 1}.
-      </p>
-      <div className="grid w-full grid-cols-2 gap-2">
-        <StatBox label="Rondas" value={`${gs.round}`} accent="text-amber-300" />
-        <StatBox
-          label="Dinero"
-          value={`$${gs.money}`}
-          accent="text-emerald-300"
-        />
-        <StatBox
-          label="Mejor jugada"
-          value={gs.stats.bestHand.toLocaleString()}
-          accent="text-rose-300"
-        />
-        <StatBox
-          label="Puntos totales"
-          value={gs.stats.totalScore.toLocaleString()}
-          accent="text-sky-300"
-        />
-      </div>
-      <div className="flex gap-3">
+      <div className="flex flex-wrap justify-center gap-3">
         <button
           onClick={onContinueEndless}
           className="rc-btn rc-btn-primary px-6 py-3"
         >
           ∞ Seguir escalando
         </button>
-        <button
-          onClick={onMenu}
-          className="rc-btn rc-btn-flat px-6 py-3"
-        >
+        <button onClick={onNewRun} className="rc-btn rc-btn-ghost px-6 py-3">
+          ▶ Nueva run
+        </button>
+        <button onClick={onMenu} className="rc-btn rc-btn-flat px-6 py-3">
           Menú principal
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Panel de depuración del perfil — Iteración 2E, sección 12. Solo se
+ * monta cuando `import.meta.env.DEV` (ver el guard en `App`, más
+ * abajo, y el mismo patrón ya usado en `src/game/debug.ts`): nunca
+ * aparece en el build de producción. Permite inspeccionar el perfil
+ * crudo, resetear progresión y desbloquear temporalmente todo el
+ * contenido implementado para probar el flujo sin jugar 3 runs
+ * completas.
+ */
+function DevProfilePanel({
+  profile,
+  onReset,
+  onUnlockAll,
+}: {
+  profile: PlayerProfile;
+  onReset: () => void;
+  onUnlockAll: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="fixed bottom-2 right-2 z-50 max-w-xs text-left">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="rc-btn rc-btn-flat px-2 py-1"
+        style={{ fontSize: "0.6rem" }}
+      >
+        🛠 DEV perfil
+      </button>
+      {open && (
+        <div className="mt-1 max-h-80 overflow-auto rounded-lg border border-white/10 bg-black/90 p-2 text-slate-300">
+          <div className="mb-2 flex gap-2">
+            <button
+              onClick={onReset}
+              className="rc-btn rc-btn-flat px-2 py-1"
+              style={{ fontSize: "0.6rem" }}
+            >
+              Reset perfil
+            </button>
+            <button
+              onClick={onUnlockAll}
+              className="rc-btn rc-btn-flat px-2 py-1"
+              style={{ fontSize: "0.6rem" }}
+            >
+              Desbloquear todo
+            </button>
+          </div>
+          <pre className="whitespace-pre-wrap break-all" style={{ fontSize: "0.6rem" }}>
+            {JSON.stringify(profile, null, 1)}
+          </pre>
+        </div>
+      )}
     </div>
   );
 }
@@ -2344,6 +2525,14 @@ export default function App() {
   const handleWinRound = (g: GameState) => {
     const outcome = resolveRoundReward(g.round, g.endless);
     if (outcome.type === "victory") {
+      // Coronación (docs/METAPROGRESSION_2E.md, sección 2): derrotar
+      // al boss final de una run no-Endless. Se registra aquí, antes
+      // de mostrar la pantalla de victoria, para que la oferta de
+      // Legados (WinScreen) ya vea el perfil actualizado.
+      const record = buildCoronationRecord(g);
+      const nextProfile = recordCoronation(profile, record, g.round, g.stats.bestHand);
+      setProfile(nextProfile);
+      saveProfile(nextProfile);
       setGs(g);
       setScreen("win");
       return;
@@ -2482,9 +2671,26 @@ export default function App() {
 
   const handleContinueEndless = () => {
     if (!gs) return;
+    // "Si continuó o no en Endless" (docs/METAPROGRESSION_2E.md,
+    // sección 2) — marca la última Coronación, nunca crea una nueva.
+    const nextProfile = markLastCoronationEndless(profile);
+    setProfile(nextProfile);
+    saveProfile(nextProfile);
     const { round, endless } = beginEndlessContinuation(gs.round);
     setGs(startRound({ ...gs, endless }, round, unlockedBossIds));
     setScreen("play");
+  };
+
+  /** Reclama un Legado tras una Coronación (docs/METAPROGRESSION_2E.md, sección 4). */
+  const handleClaimLegacy = (legacyId: string) => {
+    const nextProfile = claimLegacy(profile, legacyId);
+    setProfile(nextProfile);
+    saveProfile(nextProfile);
+  };
+
+  /** "Nueva run" desde la pantalla de Coronación: arranca de inmediato con una seed nueva, condiciones por defecto. */
+  const handleNewRunFromWin = () => {
+    newGame((Math.random() * 1e9) | 0, false);
   };
 
   return (
@@ -2624,7 +2830,10 @@ export default function App() {
         {screen === "win" && gs && (
           <WinScreen
             gs={gs}
+            profile={profile}
+            onClaimLegacy={handleClaimLegacy}
             onContinueEndless={handleContinueEndless}
+            onNewRun={handleNewRunFromWin}
             onMenu={() => setScreen("menu")}
           />
         )}
@@ -2638,6 +2847,25 @@ export default function App() {
           />
         )}
       </div>
+
+      {import.meta.env.DEV && (
+        <DevProfilePanel
+          profile={profile}
+          onReset={() => {
+            const p = defaultProfile();
+            setProfile(p);
+            saveProfile(p);
+          }}
+          onUnlockAll={() => {
+            let p = profile;
+            for (const legacy of LEGACY_POOL) {
+              if (legacy.implemented) p = claimLegacy(p, legacy.id);
+            }
+            setProfile(p);
+            saveProfile(p);
+          }}
+        />
+      )}
     </div>
   );
 }
