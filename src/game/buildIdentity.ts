@@ -93,3 +93,16 @@ export function dominantArchetypes(
     .slice(0, max)
     .map((a) => a.archetype);
 }
+
+/**
+ * Las `max` afinidades más fuertes para mostrar al jugador, sin umbral
+ * mínimo de piezas (a diferencia de `dominantArchetypes`, pensada para
+ * sesgo de ofertas) — Iteración 2G (docs/GAME_FEEL_2G.md, sección 1):
+ * el panel de build quiere "lo que hay", no solo "lo que ya es fuerte".
+ * GENERAL siempre se excluye. Reutiliza `computeBuildIdentity` tal
+ * cual — no vuelve a contar piezas por su cuenta.
+ */
+export function topAffinities(relics: Relic[], max = 2): ArchetypeAffinity[] {
+  const { affinities } = computeBuildIdentity(relics);
+  return affinities.filter((a) => a.archetype !== "GENERAL").slice(0, max);
+}

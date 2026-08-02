@@ -383,3 +383,49 @@ describe("scorePlay - linesDetailed (Iteración 2G)", () => {
     expect(line?.category).toBe("relic");
   });
 });
+
+describe("scorePlay - regresión: la metadata visual no cambia la puntuación (Iteración 2G)", () => {
+  it("chips/mult/total de una jugada con varios modificadores coinciden con el cálculo manual esperado", () => {
+    // Pareja de 10 (spades_chip: +2*12=24 fichas; pair_mult: +6 Mult).
+    // Base Pareja: 10 fichas base + valor de carta (10+10=20) = 30 fichas, mult 2.
+    const played = [
+      card({ rank: 10, suit: "spades" }),
+      card({ rank: 10, suit: "spades" }),
+    ];
+    const gs = baseGs({ relics: [relic("spades_chip"), relic("pair_mult")] });
+    const result = scorePlay(played, [], gs, false, false);
+    const expectedChips = 30 + 24; // base(30) + Filo Negro
+    const expectedMult = 2 + 6; // base(2) + Eco Gemelo
+    expect(result.chips).toBe(expectedChips);
+    expect(result.mult).toBe(expectedMult);
+    expect(result.total).toBe(Math.round(expectedChips * expectedMult));
+  });
+
+  it("añadir activations/linesDetailed no cambia el total frente a una jugada sin modificadores", () => {
+    const played = [card({ rank: 7 }), card({ rank: 7 })];
+    const result = scorePlay(played, [], baseGs(), false, false);
+    // Pareja: 10 fichas + 7+7=14 -> 24 fichas, mult 2, total 48. Sin
+    // modificadores, activations vacío y linesDetailed solo la base.
+    expect(result.total).toBe(48);
+    expect(result.activations).toEqual([]);
+    expect(result.linesDetailed).toEqual([{ text: result.lines[0], category: "base" }]);
+  });
+});
+
+describe("scorePlay - activations con boss activo (Iteración 2G, categoría ACTIVATION)", () => {
+  it("las activations de los modificadores del jugador no dependen de qué boss esté activo", () => {
+    const played = [card({ rank: 7, suit: "hearts" }), card({ rank: 7, suit: "hearts" })];
+    const gs = baseGs({ relics: [relic("pair_mult")] });
+    const withoutBoss = scorePlay(played, [], gs, false, false);
+    const withBoss = scorePlay(
+      played,
+      [],
+      { ...gs, activeBossId: "unstable_mirror" },
+      false,
+      false
+    );
+    // scorePlay ni siquiera mira activeBossId (eso lo hace scoreWithBoss
+    // en bosses.ts) — las activations deben ser idénticas.
+    expect(withBoss.activations).toEqual(withoutBoss.activations);
+  });
+});

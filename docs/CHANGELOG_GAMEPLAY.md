@@ -747,3 +747,90 @@ RNG de recompensa/tienda al restaurar asume que su algoritmo no
 cambia entre versiones; no hay export/import del save de la run
 activa (fuera de alcance); `favoriteBuild` no se ha validado con datos
 reales de muchas Coronaciones.
+
+# Changelog de gameplay — Iteración 2G
+
+Objetivo: claridad de build, feedback de mano y game feel — exclusivamente
+presentacional. Ningún objetivo de puntuación, curva, economía, precio,
+rareza, coste de reroll/banish, límite de modificadores, valor de
+modificador, regla de boss, Legado, Juramento, variante o metaprogresión se
+ha tocado. El rediseño artístico definitivo sigue pausado. Ver
+`docs/GAME_FEEL_2G.md` para el detalle completo (problema observado en
+playtest, jerarquía de información, decisiones de accesibilidad, riesgos,
+preguntas para el próximo playtest).
+
+## 1. Metadata de activación en scorePlay
+
+`ScoreBreakdown` (game/types.ts) gana `activations: RelicActivation[]`
+(`{id, active, reason, contribution}`, uno por modificador poseído) y
+`linesDetailed: ScoreLine[]` (las mismas líneas de `lines`, categorizadas
+`base`/`relic`/`card`). Se calcula inline, en las mismas ramas
+`if (has(id) && condición)` que ya decidían chips/mult — preview y
+ejecución real siguen siendo la misma llamada a `scorePlay`, así que nunca
+pueden divergir. Ningún resultado numérico cambia.
+
+## 2. Panel persistente de build y modificadores
+
+`BuildAffinityPanel` (reutiliza `computeBuildIdentity` de la 2C vía la
+nueva `topAffinities`, máximo 2 arquetipos, nunca GENERAL, puntos ●●●/●●○/
+●○○) y `ModifiersPanel`/`ModifierRow` (icono + nombre + resumen
+condición→efecto siempre visible, `src/game/relicSummaries.ts`, X/6)
+sustituyen al aside de iconos sueltos y a la fila de chips solo-móvil.
+Columna lateral fija en pantallas anchas, debajo del área de juego en
+pantallas estrechas (cartas primero).
+
+## 3. Activos en esta mano y desglose legible
+
+`ActiveModifiersBlock` separa modificadores ✓ activos (con contribución) de
+✗ inactivos (con motivo) para la jugada seleccionada, cerca de la preview.
+`ScoreBreakdownDetails` agrupa el desglose en Base/Modificadores/Cartas
+(de `linesDetailed`) y Boss (aislado por diferencia de longitud entre
+`lines` y `linesDetailed` — el boss solo añade líneas, nunca reordena),
+colapsado por defecto ("Ver desglose (N)"). Sustituye la lista plana de
+chips de texto que mezclaba todo sin distinción.
+
+## 4. Advertencia de penalización de boss
+
+`bossHandWarning` (bosses.ts) compara `scorePlay` (pre-boss) contra
+`scoreWithBoss` (post-boss) para la jugada seleccionada; si el total baja,
+la preview muestra "⚠ Penalización del boss: ..." con el texto exacto que
+el propio boss añadiría, antes de pulsar "Jugar mano".
+
+## 5. Game feel y reducción de ruido
+
+Estado "Objetivo superado" (barra dorada/esmeralda, pulso breve) al cruzar
+el objetivo de ronda; "Faltan X" mientras no se alcanza. Historial de
+jugadas colapsado por defecto. Pulso breve en un modificador que pasa de
+inactivo a activo entre selecciones. Regla global en `index.css` que
+respeta `prefers-reduced-motion` desactivando toda animación existente y
+futura basada en el patrón `animate-[...]`/`style={{animation}}`.
+
+## 6. Tooltip accesible
+
+`Tooltip` reescrito: trigger focuseable (`tabIndex`, `role="button"`,
+`aria-describedby`), visible con hover o foco de teclado, click/tap para
+alternar (preparado para touch), Escape para cerrar. Usado en modificadores
+(ya existía) y ahora también en arquetipos del panel de build.
+
+## 7. Pruebas añadidas
+
+303 tests en 18 archivos (antes 271 al cierre de la 2F). Nuevos casos:
+activación por modificador (activo/inactivo/siempre-activo/fin-de-ronda,
+orden según `gs.relics`, independiente del boss activo), `linesDetailed`
+paralelo a `lines`, `bossHandWarning` (advierte/no advierte según boss y
+jugada, coincide con la línea real del boss), `scoreWithBoss` preserva
+`activations`/`linesDetailed` sin cambiarlas, `topAffinities` (coincide con
+`computeBuildIdentity`, excluye GENERAL, respeta el máximo, sin umbral
+mínimo a diferencia de `dominantArchetypes`), regresión numérica explícita
+(chips/mult/total calculados a mano coinciden), y un test de persistencia
+que fija que `ScoreBreakdown` nunca forma parte de `RunSave`. Los 271 tests
+previos siguen pasando sin cambios de comportamiento.
+
+## 8. Riesgos pendientes
+
+Ver `docs/GAME_FEEL_2G.md` sección 13: sidebar no probada en un rango
+exhaustivo de anchos intermedios; el pulso de activación depende de que
+`ActiveModifiersBlock` no se desmonte entre renders (fallo silencioso, no
+rompe nada); `bossHandWarning` recalcula `scorePlay` una vez más (barato,
+no memoizado); no validado con usuarios reales si "Ver desglose" colapsado
+es suficientemente descubrible.

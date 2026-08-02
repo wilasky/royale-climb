@@ -4,6 +4,7 @@ import {
   computeArchetypeCounts,
   computeBuildIdentity,
   dominantArchetypes,
+  topAffinities,
 } from "./buildIdentity";
 import type { Relic } from "./types";
 
@@ -98,5 +99,49 @@ describe("dominantArchetypes", () => {
     // PAIR:2, STRAIGHT:1, FIRST_HAND:1, FLUSH:2 -> con minCount=1 hay 4
     // candidatos, pero max=2 limita el resultado.
     expect(dominantArchetypes(relics, 1, 2).length).toBe(2);
+  });
+});
+
+describe("topAffinities (Iteración 2G, sección 1: panel de build)", () => {
+  it("coincide exactamente con las afinidades que calcula computeBuildIdentity", () => {
+    const relics = [relic("pair_mult"), relic("pair_chain"), relic("straight_mult")];
+    const { affinities } = computeBuildIdentity(relics);
+    const expected = affinities.filter((a) => a.archetype !== "GENERAL").slice(0, 2);
+    expect(topAffinities(relics, 2)).toEqual(expected);
+  });
+
+  it("GENERAL nunca aparece, aunque tenga más piezas que el resto", () => {
+    const relics = [
+      relic("scaling_round"),
+      relic("blood_pact"),
+      relic("the_collector"),
+      relic("pair_mult"),
+    ];
+    const shown = topAffinities(relics, 2);
+    expect(shown.every((a) => a.archetype !== "GENERAL")).toBe(true);
+    expect(shown).toEqual([{ archetype: "PAIR", count: 1, strength: "weak" }]);
+  });
+
+  it("respeta el máximo — nunca devuelve más de `max` arquetipos", () => {
+    const relics = [
+      relic("pair_mult"),
+      relic("straight_mult"),
+      relic("flush_chips"),
+      relic("first_hand_mult"),
+    ];
+    expect(topAffinities(relics, 2).length).toBe(2);
+    expect(topAffinities(relics, 1).length).toBe(1);
+  });
+
+  it("sin modificadores, no muestra ninguna afinidad", () => {
+    expect(topAffinities([], 2)).toEqual([]);
+  });
+
+  it("no tiene umbral mínimo de piezas — una sola pieza ya se muestra (a diferencia de dominantArchetypes)", () => {
+    const relics = [relic("pair_mult")];
+    expect(topAffinities(relics, 2)).toEqual([
+      { archetype: "PAIR", count: 1, strength: "weak" },
+    ]);
+    expect(dominantArchetypes(relics, 2, 2)).toEqual([]);
   });
 });

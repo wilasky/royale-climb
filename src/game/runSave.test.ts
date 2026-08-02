@@ -301,3 +301,25 @@ describe("tipos auxiliares (smoke test de forma)", () => {
     expect(shop.stock.relics).toEqual([]);
   });
 });
+
+describe("regresión (Iteración 2G): la metadata visual de scorePlay no afecta al RunSave", () => {
+  it("un GameState válido se guarda y restaura igual que antes de la 2G — ScoreBreakdown no es parte del estado persistido", () => {
+    // Iteración 2G añadió `activations`/`linesDetailed` a ScoreBreakdown
+    // (game/types.ts), pero ScoreBreakdown es un resultado transitorio de
+    // scorePlay/scoreWithBoss, nunca un campo de GameState — por diseño,
+    // no hay ningún camino por el que esos campos nuevos puedan llegar a
+    // `RunSave`. Este test fija esa invariante con un save realista
+    // (varios modificadores, boss activo) round-trippeado tal cual.
+    const storage = memoryStorage();
+    const save = baseSave({
+      gameState: baseGs({
+        relics: [relic("pair_mult"), relic("hearts_mult"), relic("the_collector")],
+        activeBossId: "unstable_mirror",
+        bossState: { lastHandName: "Pareja" },
+      }),
+    });
+    saveRunSave(save, storage);
+    const result = loadRunSave(storage);
+    expect(result).toEqual({ status: "valid", save });
+  });
+});

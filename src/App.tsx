@@ -84,7 +84,7 @@ import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS
 import { pickRelicOffer } from "./game/offers";
 import { rerollCost, canReroll } from "./game/rerolls";
 import { canBanish, banishCost, applyBanish } from "./game/banish";
-import { dominantArchetypes, computeBuildIdentity } from "./game/buildIdentity";
+import { dominantArchetypes, topAffinities } from "./game/buildIdentity";
 import type { AffinityStrength } from "./game/buildIdentity";
 import { ARCHETYPE_LABELS } from "./game/archetypes";
 import { logRelicOfferDebug } from "./game/debug";
@@ -726,8 +726,7 @@ const STRENGTH_LABEL: Record<AffinityStrength, string> = {
  * recalcula afinidades por su cuenta (docs/GAME_FEEL_2G.md, sección 1).
  */
 function BuildAffinityPanel({ relics }: { relics: Relic[] }) {
-  const { affinities } = computeBuildIdentity(relics);
-  const shown = affinities.filter((a) => a.archetype !== "GENERAL").slice(0, 2);
+  const shown = topAffinities(relics, 2);
   if (shown.length === 0) return null;
   return (
     <div className="rc-panel mb-3 p-3">

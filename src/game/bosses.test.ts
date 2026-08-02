@@ -498,3 +498,21 @@ describe("bossHandWarning (Iteración 2G, docs/GAME_FEEL_2G.md sección 9)", () 
     expect(bossHandWarning(gs, played, [], false, false)).toBe(expectedLine);
   });
 });
+
+describe("scoreWithBoss preserva activations/linesDetailed tal cual (Iteración 2G, categoría PREVIEW)", () => {
+  it("las activations no cambian al pasar por un boss — modifyScore solo toca chips/mult/total/lines", () => {
+    const played = [card({ rank: 6 }), card({ rank: 6 })]; // Pareja
+    const gs = baseGs({
+      relics: [{ id: "pair_mult", name: "Eco Gemelo", desc: "", rarity: "common", icon: "•" }],
+      activeBossId: "unstable_mirror",
+      bossState: { lastHandName: "Pareja" },
+    });
+    const pre = scorePlay(played, [], gs, false, false);
+    const post = scoreWithBoss(played, [], gs, false, false);
+    expect(post.activations).toEqual(pre.activations);
+    expect(post.linesDetailed).toEqual(pre.linesDetailed);
+    // El total SÍ cambia (el boss penaliza la repetición) — confirma que
+    // la comparación de arriba no es trivial por "todo es igual".
+    expect(post.total).not.toBe(pre.total);
+  });
+});
