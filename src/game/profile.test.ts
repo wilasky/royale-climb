@@ -6,11 +6,13 @@ import {
   saveProfile,
   recordRunStart,
   recordCoronation,
+  recordRunEnd,
+  buildPlayerStats,
   markLastCoronationEndless,
   PROFILE_VERSION,
   PROFILE_STORAGE_KEY,
 } from "./profile";
-import type { ProfileStorage } from "./profile";
+import type { ProfileStorage, RunEndSummary } from "./profile";
 import type { CoronationRecord } from "./coronation";
 
 /** Storage en memoria para no depender de localStorage/jsdom en tests. */
@@ -231,5 +233,133 @@ describe("markLastCoronationEndless", () => {
     p = markLastCoronationEndless(p);
     expect(p.coronations[0].continuedEndless).toBe(false);
     expect(p.coronations[1].continuedEndless).toBe(true);
+  });
+});
+
+function summary(overrides: Partial<RunEndSummary> = {}): RunEndSummary {
+  return {
+    won: false,
+    endless: false,
+    reachedRound: 4,
+    totalScore: 900,
+    bestHand: 300,
+    handsPlayed: 12,
+    discardsUsed: 5,
+    rerollsUsed: 2,
+    shopPurchases: 3,
+    banishesUsed: 1,
+    ...overrides,
+  };
+}
+
+describe("recordRunEnd — estadísticas (docs/PERSISTENCE_2F.md, sección 10)", () => {
+  it("una derrota incrementa runsLost, nunca runsWon", () => {
+    const p = recordRunEnd(defaultProfile(), summary({ won: false }));
+    expect(p.runsLost).toBe(1);
+    expect(p.runsWon).toBe(0);
+  });
+
+  it("una victoria (won:true) no incrementa runsLost", () => {
+    const p = recordRunEnd(defaultProfile(), summary({ won: true }));
+    expect(p.runsLost).toBe(0);
+  });
+
+  it("acumula hands/discards/rerolls/banishes/compras a través de varias runs", () => {
+    let p = recordRunEnd(defaultProfile(), summary({ handsPlayed: 10, discardsUsed: 3, rerollsUsed: 1, shopPurchases: 2, banishesUsed: 1 }));
+    p = recordRunEnd(p, summary({ handsPlayed: 5, discardsUsed: 2, rerollsUsed: 0, shopPurchases: 1, banishesUsed: 0 }));
+    expect(p.totalHandsPlayed).toBe(15);
+    expect(p.totalDiscards).toBe(5);
+    expect(p.totalRerolls).toBe(1);
+    expect(p.totalShopPurchases).toBe(3);
+    expect(p.totalBanishes).toBe(1);
+  });
+
+  it("actualiza bestRound/bestTotalScore/bestHand con el máximo, no el último valor", () => {
+    let p = recordRunEnd(defaultProfile(), summary({ reachedRound: 6, totalScore: 5000, bestHand: 800 }));
+    p = recordRunEnd(p, summary({ reachedRound: 3, totalScore: 1000, bestHand: 200 }));
+    expect(p.bestRound).toBe(6);
+    expect(p.bestTotalScore).toBe(5000);
+    expect(p.bestHand).toBe(800);
+  });
+
+  it("una run no-Endless no toca highestEndlessRound", () => {
+    const p = recordRunEnd(defaultProfile(), summary({ endless: false, reachedRound: 12 }));
+    expect(p.highestEndlessRound).toBe(0);
+  });
+
+  it("una run Endless actualiza highestEndlessRound con el máximo", () => {
+    let p = recordRunEnd(defaultProfile(), summary({ endless: true, reachedRound: 11 }));
+    p = recordRunEnd(p, summary({ endless: true, reachedRound: 15 }));
+    p = recordRunEnd(p, summary({ endless: true, reachedRound: 13 }));
+    expect(p.highestEndlessRound).toBe(15);
+  });
+
+  it("no muta el perfil recibido", () => {
+    const p = defaultProfile();
+    recordRunEnd(p, summary());
+    expect(p).toEqual(defaultProfile());
+  });
+
+  it("victoria: recordCoronation + recordRunEnd juntos no duplican runsWon", () => {
+    let p = recordCoronation(defaultProfile(), record(), 9, 500);
+    p = recordRunEnd(p, summary({ won: true, reachedRound: 9, totalScore: 1000, bestHand: 500 }));
+    expect(p.runsWon).toBe(1);
+    expect(p.runsLost).toBe(0);
+  });
+});
+
+describe("buildPlayerStats", () => {
+  it("perfil nuevo: todo en cero, winRate 0, sin build favorita", () => {
+    const s = buildPlayerStats(defaultProfile());
+    expect(s.runsStarted).toBe(0);
+    expect(s.winRate).toBe(0);
+    expect(s.favoriteBuild).toBeNull();
+    expect(s.coronationsCount).toBe(0);
+  });
+
+  it("winRate se deriva de runsWon/runsStarted", () => {
+    let p = recordRunStart(defaultProfile());
+    p = recordRunStart(p);
+    p = recordRunStart(p);
+    p = recordRunStart(p);
+    p = recordCoronation(p, record(), 9, 100);
+    const s = buildPlayerStats(p);
+    expect(s.runsStarted).toBe(4);
+    expect(s.runsWon).toBe(1);
+    expect(s.winRate).toBeCloseTo(0.25);
+  });
+
+  it("expone highestRound/bestSingleHand como alias de bestRound/bestHand", () => {
+    const p = recordRunEnd(defaultProfile(), summary({ reachedRound: 7, bestHand: 640 }));
+    const s = buildPlayerStats(p);
+    expect(s.highestRound).toBe(7);
+    expect(s.bestSingleHand).toBe(640);
+  });
+
+  it("favoriteBuild es el dominantBuild más frecuente entre las Coronaciones", () => {
+    let p = recordCoronation(defaultProfile(), record({ seed: 1, dominantBuild: "Escaleras" }), 9, 100);
+    p = recordCoronation(p, record({ seed: 2, dominantBuild: "Parejas" }), 9, 100);
+    p = recordCoronation(p, record({ seed: 3, dominantBuild: "Escaleras" }), 9, 100);
+    const s = buildPlayerStats(p);
+    expect(s.favoriteBuild).toBe("Escaleras");
+  });
+
+  it("Coronaciones sin build dominante (null) no rompen el cálculo", () => {
+    const p = recordCoronation(defaultProfile(), record({ dominantBuild: null }), 9, 100);
+    const s = buildPlayerStats(p);
+    expect(s.favoriteBuild).toBeNull();
+  });
+
+  it("bossesDefeated se expone tal cual desde el perfil", () => {
+    const p = recordCoronation(defaultProfile(), record({ finalBossId: "split_throne" }), 9, 100);
+    const s = buildPlayerStats(p);
+    expect(s.bossesDefeated).toEqual({ split_throne: 1 });
+  });
+
+  it("no muta el perfil recibido", () => {
+    const p = recordCoronation(defaultProfile(), record(), 9, 100);
+    const before = structuredClone(p);
+    buildPlayerStats(p);
+    expect(p).toEqual(before);
   });
 });

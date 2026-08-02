@@ -35,11 +35,21 @@ export interface PlayerProfile {
   /** Redundante con `coronations.length` a propósito (sección 1 pide
    *  el campo explícito); `recordCoronation` mantiene ambos en sync. */
   runsWon: number;
+  /** Runs terminadas en derrota — Iteración 2F, sección 10. */
+  runsLost: number;
   /** bossId -> nº de veces derrotado como boss final de una Coronación. */
   bossesDefeated: Record<string, number>;
   bestRound: number;
   bestTotalScore: number;
   bestHand: number;
+  /** Mejor ronda alcanzada en Endless (más allá de la 9) — sección 10. */
+  highestEndlessRound: number;
+  /** Totales acumulados entre todas las runs — sección 10. */
+  totalHandsPlayed: number;
+  totalDiscards: number;
+  totalRerolls: number;
+  totalBanishes: number;
+  totalShopPurchases: number;
   /** Escalera simple de dificultad desbloqueada (0 = ninguna Juramento). */
   maxDifficultyUnlocked: number;
   /** Ids de `LegacyDefinition` ya reclamados (ver legacies.ts). */
@@ -53,10 +63,17 @@ export function defaultProfile(): PlayerProfile {
     version: PROFILE_VERSION,
     runsStarted: 0,
     runsWon: 0,
+    runsLost: 0,
     bossesDefeated: {},
     bestRound: 0,
     bestTotalScore: 0,
     bestHand: 0,
+    highestEndlessRound: 0,
+    totalHandsPlayed: 0,
+    totalDiscards: 0,
+    totalRerolls: 0,
+    totalBanishes: 0,
+    totalShopPurchases: 0,
     maxDifficultyUnlocked: 0,
     claimedLegacyIds: [],
     coronations: [],
@@ -133,10 +150,17 @@ export function migrateProfile(raw: unknown): PlayerProfile {
     version: PROFILE_VERSION,
     runsStarted: num(raw.runsStarted, fallback.runsStarted),
     runsWon: num(raw.runsWon, fallback.runsWon),
+    runsLost: num(raw.runsLost, fallback.runsLost),
     bossesDefeated: recordOfNum(raw.bossesDefeated, fallback.bossesDefeated),
     bestRound: num(raw.bestRound, fallback.bestRound),
     bestTotalScore: num(raw.bestTotalScore, fallback.bestTotalScore),
     bestHand: num(raw.bestHand, fallback.bestHand),
+    highestEndlessRound: num(raw.highestEndlessRound, fallback.highestEndlessRound),
+    totalHandsPlayed: num(raw.totalHandsPlayed, fallback.totalHandsPlayed),
+    totalDiscards: num(raw.totalDiscards, fallback.totalDiscards),
+    totalRerolls: num(raw.totalRerolls, fallback.totalRerolls),
+    totalBanishes: num(raw.totalBanishes, fallback.totalBanishes),
+    totalShopPurchases: num(raw.totalShopPurchases, fallback.totalShopPurchases),
     maxDifficultyUnlocked: num(raw.maxDifficultyUnlocked, fallback.maxDifficultyUnlocked),
     claimedLegacyIds: strArr(raw.claimedLegacyIds, fallback.claimedLegacyIds),
     coronations: coronationArr(raw.coronations, fallback.coronations),
@@ -222,4 +246,113 @@ export function markLastCoronationEndless(profile: PlayerProfile): PlayerProfile
   const last = coronations[coronations.length - 1];
   coronations[coronations.length - 1] = { ...last, continuedEndless: true };
   return { ...profile, coronations };
+}
+
+/**
+ * Resumen de una run que acaba de terminar (victoria o derrota) — lo
+ * que hace falta para actualizar los totales "outcome-agnósticos" de
+ * la sección 10. Deliberadamente separado de `CoronationRecord`: una
+ * Coronación solo existe en victoria, `recordRunEnd` se llama
+ * SIEMPRE (derrota y victoria) para que hands/discards/rerolls/
+ * banishes/compras y las mejores marcas se acumulen sin importar
+ * cómo terminó la run. `runProgress` (descartes/rerolls/compras) vive
+ * en `RunSave`, no en `GameState` — ver runSave.ts.
+ */
+export interface RunEndSummary {
+  won: boolean;
+  endless: boolean;
+  reachedRound: number;
+  totalScore: number;
+  bestHand: number;
+  handsPlayed: number;
+  discardsUsed: number;
+  rerollsUsed: number;
+  shopPurchases: number;
+  banishesUsed: number;
+}
+
+/**
+ * Acumula los totales de una run terminada — sección 10. Llamar en
+ * AMBOS casos (derrota y victoria); en victoria se llama además de
+ * `recordCoronation` (que sigue siendo el único responsable de
+ * `runsWon`/`coronations`/`bossesDefeated`, para no duplicar esos
+ * campos aquí).
+ */
+export function recordRunEnd(
+  profile: PlayerProfile,
+  summary: RunEndSummary
+): PlayerProfile {
+  return {
+    ...profile,
+    runsLost: profile.runsLost + (summary.won ? 0 : 1),
+    totalHandsPlayed: profile.totalHandsPlayed + summary.handsPlayed,
+    totalDiscards: profile.totalDiscards + summary.discardsUsed,
+    totalRerolls: profile.totalRerolls + summary.rerollsUsed,
+    totalBanishes: profile.totalBanishes + summary.banishesUsed,
+    totalShopPurchases: profile.totalShopPurchases + summary.shopPurchases,
+    bestRound: Math.max(profile.bestRound, summary.reachedRound),
+    bestTotalScore: Math.max(profile.bestTotalScore, summary.totalScore),
+    bestHand: Math.max(profile.bestHand, summary.bestHand),
+    highestEndlessRound: summary.endless
+      ? Math.max(profile.highestEndlessRound, summary.reachedRound)
+      : profile.highestEndlessRound,
+  };
+}
+
+/** Estadísticas derivadas para mostrar al jugador — sección 10, `buildPlayerStats(profile)`. */
+export interface PlayerStats {
+  runsStarted: number;
+  runsWon: number;
+  runsLost: number;
+  /** `runsWon / runsStarted`, entre 0 y 1. `0` si todavía no se ha iniciado ninguna run. */
+  winRate: number;
+  totalHandsPlayed: number;
+  totalDiscards: number;
+  totalRerolls: number;
+  totalBanishes: number;
+  totalShopPurchases: number;
+  highestRound: number;
+  highestEndlessRound: number;
+  bestTotalScore: number;
+  bestSingleHand: number;
+  coronationsCount: number;
+  bossesDefeated: Record<string, number>;
+  /** Arquetipo más frecuente entre `coronations[].dominantBuild`, o `null` sin datos suficientes. */
+  favoriteBuild: string | null;
+}
+
+/** Pura — no lee ni escribe storage, solo deriva de un `PlayerProfile` ya cargado. */
+export function buildPlayerStats(profile: PlayerProfile): PlayerStats {
+  const counts = new Map<string, number>();
+  for (const c of profile.coronations) {
+    if (!c.dominantBuild) continue;
+    counts.set(c.dominantBuild, (counts.get(c.dominantBuild) ?? 0) + 1);
+  }
+  let favoriteBuild: string | null = null;
+  let favoriteCount = 0;
+  for (const [build, count] of counts) {
+    if (count > favoriteCount) {
+      favoriteBuild = build;
+      favoriteCount = count;
+    }
+  }
+
+  return {
+    runsStarted: profile.runsStarted,
+    runsWon: profile.runsWon,
+    runsLost: profile.runsLost,
+    winRate: profile.runsStarted > 0 ? profile.runsWon / profile.runsStarted : 0,
+    totalHandsPlayed: profile.totalHandsPlayed,
+    totalDiscards: profile.totalDiscards,
+    totalRerolls: profile.totalRerolls,
+    totalBanishes: profile.totalBanishes,
+    totalShopPurchases: profile.totalShopPurchases,
+    highestRound: profile.bestRound,
+    highestEndlessRound: profile.highestEndlessRound,
+    bestTotalScore: profile.bestTotalScore,
+    bestSingleHand: profile.bestHand,
+    coronationsCount: profile.coronations.length,
+    bossesDefeated: profile.bossesDefeated,
+    favoriteBuild,
+  };
 }

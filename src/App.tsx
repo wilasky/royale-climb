@@ -35,8 +35,10 @@ import {
   saveProfile,
   recordRunStart,
   recordCoronation,
+  recordRunEnd,
   markLastCoronationEndless,
   defaultProfile,
+  buildPlayerStats,
 } from "./game/profile";
 import type { PlayerProfile } from "./game/profile";
 import { buildCoronationRecord } from "./game/coronation";
@@ -2585,6 +2587,33 @@ function DevProfilePanel({
               Desbloquear todo
             </button>
           </div>
+          <div className="mb-2 border-b border-white/10 pb-2" style={{ fontSize: "0.6rem" }}>
+            {(() => {
+              const s = buildPlayerStats(profile);
+              return (
+                <>
+                  <div>
+                    runs: {s.runsStarted} · ganadas: {s.runsWon} · perdidas: {s.runsLost} ·
+                    winRate: {(s.winRate * 100).toFixed(0)}%
+                  </div>
+                  <div>
+                    manos: {s.totalHandsPlayed} · descartes: {s.totalDiscards} · rerolls:{" "}
+                    {s.totalRerolls} · destierros: {s.totalBanishes} · compras:{" "}
+                    {s.totalShopPurchases}
+                  </div>
+                  <div>
+                    mejor ronda: {s.highestRound} · mejor ronda Endless:{" "}
+                    {s.highestEndlessRound} · mejor puntuación: {s.bestTotalScore} · mejor
+                    mano: {s.bestSingleHand}
+                  </div>
+                  <div>
+                    Coronaciones: {s.coronationsCount} · build favorita:{" "}
+                    {s.favoriteBuild ?? "—"}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
           <pre className="whitespace-pre-wrap break-all" style={{ fontSize: "0.6rem" }}>
             {JSON.stringify(profile, null, 1)}
           </pre>
@@ -2806,7 +2835,22 @@ export default function App() {
       // de mostrar la pantalla de victoria, para que la oferta de
       // Legados (WinScreen) ya vea el perfil actualizado.
       const record = buildCoronationRecord(g);
-      const nextProfile = recordCoronation(profile, record, g.round, g.stats.bestHand);
+      let nextProfile = recordCoronation(profile, record, g.round, g.stats.bestHand);
+      // Totales outcome-agnósticos (sección 10) — recordCoronation ya
+      // actualizó runsWon/coronations/bossesDefeated, recordRunEnd
+      // añade hands/discards/rerolls/banishes/compras de ESTA run.
+      nextProfile = recordRunEnd(nextProfile, {
+        won: true,
+        endless: g.endless,
+        reachedRound: g.round,
+        totalScore: g.stats.totalScore,
+        bestHand: g.stats.bestHand,
+        handsPlayed: g.stats.handsPlayed,
+        discardsUsed: runProgress.discardsUsed,
+        rerollsUsed: runProgress.rerollsUsed,
+        shopPurchases: runProgress.shopPurchases,
+        banishesUsed: g.banishedRelicIds.length,
+      });
       setProfile(nextProfile);
       saveProfile(nextProfile);
       setGs(g);
@@ -3140,6 +3184,23 @@ export default function App() {
               // y a prueba de que se llegue aquí por otra vía).
               deleteRunSave();
               setRunSaveState({ status: "none" });
+              // Totales outcome-agnósticos (sección 10) — una derrota
+              // también cuenta hands/discards/rerolls/banishes/compras
+              // y puede batir mejores marcas, aunque no sea Coronación.
+              const nextProfile = recordRunEnd(profile, {
+                won: false,
+                endless: g.endless,
+                reachedRound: g.round,
+                totalScore: g.stats.totalScore,
+                bestHand: g.stats.bestHand,
+                handsPlayed: g.stats.handsPlayed,
+                discardsUsed: runProgress.discardsUsed,
+                rerollsUsed: runProgress.rerollsUsed,
+                shopPurchases: runProgress.shopPurchases,
+                banishesUsed: g.banishedRelicIds.length,
+              });
+              setProfile(nextProfile);
+              saveProfile(nextProfile);
               setGs(g);
               setScreen("defeat");
             }}
