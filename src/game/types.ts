@@ -78,6 +78,19 @@ export interface GameState {
    * lógica extra); una partida nueva siempre empieza con la lista vacía.
    */
   banishedRelicIds: string[];
+  /**
+   * Boss activo de la ronda actual — Iteración 2D
+   * (docs/BOSS_DESIGN_2D.md). `null` en rondas normales. Se recalcula en
+   * cada `startRound`: solo existe durante la ronda de boss en la que fue
+   * seleccionado, nunca persiste a la ronda siguiente.
+   */
+  activeBossId: string | null;
+  /**
+   * Estado interno del boss activo (p.ej. tipo de la última mano jugada,
+   * fase actual). Bolsa de datos pequeña y serializable, propia de cada
+   * `BossDefinition`; vacía cuando no hay boss activo.
+   */
+  bossState: Record<string, unknown>;
 }
 
 export interface ScoreBreakdown {

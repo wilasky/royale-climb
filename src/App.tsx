@@ -13,14 +13,21 @@ import type {
 } from "./game/types";
 import { makeRng, shuffle } from "./game/rng";
 import type { Rng } from "./game/rng";
-import { scorePlay, glassRisk, diamondMoneyPreview } from "./game/scoring";
+import { glassRisk, diamondMoneyPreview } from "./game/scoring";
 import {
   targetForRound,
   anteOfRound,
   resolveRoundReward,
   resolveAfterShop,
   beginEndlessContinuation,
+  isBossRound,
 } from "./game/progression";
+import {
+  selectBossForAnte,
+  initBossState,
+  scoreWithBoss,
+  advanceBossState,
+} from "./game/bosses";
 import { phaseForRound } from "./game/progression";
 import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, SHOP_SPECIAL_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION, REWARD_REROLL_COSTS, REWARD_REROLL_MAX, SHOP_REROLL_COSTS, SHOP_REROLL_MAX, BANISH_MAX, BANISH_COSTS, SYNERGY_MIN_AFFINITY } from "./game/config";
 import { pickRelicOffer } from "./game/offers";
@@ -836,14 +843,17 @@ function PlayScreen({
   const isLastHand = gs.handsLeft === 1;
 
   // Previsualización real (docs/GAME_AUDIT.md P0-3): usa exactamente
-  // scorePlay, la misma función que playHand() usa para puntuar de
-  // verdad, con los mismos argumentos. No consume RNG ni muta nada -
+  // scoreWithBoss, la misma función que playHand() usa para puntuar de
+  // verdad, con los mismos argumentos. scoreWithBoss ya envuelve
+  // scorePlay aplicando el boss activo si lo hay (docs/BOSS_DESIGN_2D.md)
+  // — así la preview refleja también las reglas de boss, no solo la
+  // puntuación base. No consume RNG ni muta nada -
   // glassRisk/diamondMoneyPreview son puramente informativos.
   const preview = useMemo(() => {
     const played = gs.hand.filter((c) => selected.includes(c.id));
     if (played.length === 0) return null;
     const held = gs.hand.filter((c) => !selected.includes(c.id));
-    const breakdown = scorePlay(played, held, gs, isFirstHand, isLastHand);
+    const breakdown = scoreWithBoss(played, held, gs, isFirstHand, isLastHand);
     const glass = glassRisk(played, gs.relics);
     const moneyGain = diamondMoneyPreview(played, gs.relics);
     return { breakdown, glass, moneyGain };
@@ -884,7 +894,7 @@ function PlayScreen({
     if (selected.length === 0 || gs.handsLeft <= 0) return;
     const played = gs.hand.filter((c) => selected.includes(c.id));
     const held = gs.hand.filter((c) => !selected.includes(c.id));
-    const bd = scorePlay(played, held, gs, isFirstHand, isLastHand);
+    const bd = scoreWithBoss(played, held, gs, isFirstHand, isLastHand);
     const moneyGain = diamondMoneyPreview(played, gs.relics);
 
     // Misma probabilidad que se muestra en la previsualización
@@ -914,6 +924,7 @@ function PlayScreen({
       handsLeft: gs.handsLeft - 1,
       scoreThisRound: gs.scoreThisRound + bd.total,
       money: gs.money + moneyGain,
+      bossState: advanceBossState(gs, bd, isFirstHand, isLastHand),
       history: [
         { hand: bd.handName, score: bd.total, round: gs.round },
         ...gs.history,
@@ -2077,10 +2088,19 @@ export default function App() {
     (base: GameState, round: number): GameState => {
       const rng = makeRng(base.seed + round * 104729);
       const drawPile = shuffle(rng, base.deck);
+      // Boss de esta ronda (docs/BOSS_DESIGN_2D.md): se recalcula en
+      // cada startRound, así que nunca sobrevive a la ronda para la que
+      // fue seleccionado. Endless no tiene bosses (isBossRound ya lo
+      // excluye), y selectBossForAnte devuelve null si ese ante todavía
+      // no tiene ningún boss definido.
+      const ante = anteOfRound(round);
+      const boss = isBossRound(round, base.endless)
+        ? selectBossForAnte(base.seed, ante as 1 | 2 | 3)
+        : null;
       let g: GameState = {
         ...base,
         round,
-        ante: anteOfRound(round),
+        ante,
         drawPile,
         hand: [],
         discardPile: [],
@@ -2089,6 +2109,8 @@ export default function App() {
         scoreThisRound: 0,
         target: targetForRound(round),
         discardsUsedThisRound: 0,
+        activeBossId: boss?.id ?? null,
+        bossState: initBossState(boss?.id ?? null),
       };
       if (g.relics.some((r) => r.id === "blood_pact"))
         g = { ...g, handsLeft: Math.max(1, g.handsLeft - 1) };
@@ -2126,6 +2148,8 @@ export default function App() {
       endless,
       stats: { handsPlayed: 0, bestHand: 0, totalScore: 0 },
       banishedRelicIds: [],
+      activeBossId: null,
+      bossState: {},
     };
     rewardRng.current = makeRng(seed + 555);
     shopRng.current = makeRng(seed + 999);

@@ -54,6 +54,28 @@ export function isNormalRunComplete(round: number, endless: boolean): boolean {
   return !endless && round === ROUNDS_PER_RUN;
 }
 
+/**
+ * Si una ronda es ronda de boss — Iteración 2D (docs/BOSS_DESIGN_2D.md,
+ * sección 1). Coincide exactamente con las rondas de tienda (última de
+ * cada ante), pero se expone con su propio nombre porque responde a una
+ * pregunta distinta ("¿toca combate de boss?" vs. "¿toca tienda al
+ * superarla?") aunque hoy compartan la misma aritmética. Endless no
+ * tiene bosses — "continúa después de la victoria utilizando su sistema
+ * actual" (encargo, sección 1).
+ */
+export function isBossRound(round: number, endless: boolean): boolean {
+  return !endless && isShopRound(round);
+}
+
+/**
+ * Si una ronda es el boss final de la run (ronda 9 de Nueva partida).
+ * Reutiliza `isNormalRunComplete` — es la misma condición, nombrada para
+ * el contexto de bosses.
+ */
+export function isFinalBossRound(round: number, endless: boolean): boolean {
+  return isNormalRunComplete(round, endless);
+}
+
 export type RoundReward =
   | { type: "victory" } // solo Nueva partida, exactamente en ROUNDS_PER_RUN
   | { type: "shop" } // múltiplos de ROUNDS_PER_ANTE (3, 6, 9, 12...)
