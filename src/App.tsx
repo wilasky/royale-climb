@@ -642,11 +642,45 @@ function PlayingCard({
   );
 }
 
+/* ---------------- Tooltip/help accesible (Iteración 2G, sección 12) ----------------
+   Desktop: hover o foco de teclado. Preparado para touch: click/tap alterna
+   la visibilidad (útil en pantallas sin hover real). Escape cierra. El
+   trigger es focuseable (tabIndex=0) y enlaza con el panel de texto vía
+   aria-describedby — no depende solo de CSS :hover, así que funciona con
+   teclado y lectores de pantalla. */
+let tooltipIdSeq = 0;
+
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const idRef = useRef<string>(`rc-tooltip-${tooltipIdSeq++}`);
   return (
-    <span className="group relative inline-flex">
-      {children}
-      <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden w-52 -translate-x-1/2 rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-xs text-slate-200 shadow-xl group-hover:block">
+    <span
+      className="relative inline-flex"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <span
+        tabIndex={0}
+        role="button"
+        aria-describedby={idRef.current}
+        aria-expanded={open}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setOpen(false);
+        }}
+        className="inline-flex cursor-help rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+      >
+        {children}
+      </span>
+      <span
+        id={idRef.current}
+        role="tooltip"
+        className={`pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-52 -translate-x-1/2 rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-xs text-slate-200 shadow-xl transition-opacity duration-100 ${
+          open ? "opacity-100" : "invisible opacity-0"
+        }`}
+      >
         {text}
       </span>
     </span>
@@ -710,12 +744,16 @@ function BuildAffinityPanel({ relics }: { relics: Relic[] }) {
             <span className="text-xs text-slate-300">
               {ARCHETYPE_LABELS[a.archetype]}
             </span>
-            <span aria-hidden="true" className="font-mono text-sm tracking-widest text-amber-300">
-              {"●".repeat(STRENGTH_DOTS[a.strength])}
-              <span className="text-slate-700">
-                {"●".repeat(3 - STRENGTH_DOTS[a.strength])}
+            <Tooltip
+              text={`${a.count} modificador${a.count === 1 ? "" : "es"} de ${ARCHETYPE_LABELS[a.archetype]} — afinidad ${STRENGTH_LABEL[a.strength]}.`}
+            >
+              <span aria-hidden="true" className="font-mono text-sm tracking-widest text-amber-300">
+                {"●".repeat(STRENGTH_DOTS[a.strength])}
+                <span className="text-slate-700">
+                  {"●".repeat(3 - STRENGTH_DOTS[a.strength])}
+                </span>
               </span>
-            </span>
+            </Tooltip>
           </div>
         ))}
       </div>
