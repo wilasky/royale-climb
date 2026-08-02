@@ -10,6 +10,7 @@ import type {
   SpecialCardKind,
   GameState,
   ScoreBreakdown,
+  RelicActivation,
 } from "./game/types";
 import { makeRng, shuffle } from "./game/rng";
 import type { Rng } from "./game/rng";
@@ -766,6 +767,155 @@ function ModifiersPanel({ relics }: { relics: Relic[] }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ---------------- "Activos en esta mano" (Iteración 2G, sección 4) ----------------
+   Lee breakdown.activations tal cual lo calculó scorePlay — no recalcula ni
+   decide nada por su cuenta sobre qué modificador activa. */
+function ActiveModifiersBlock({
+  relics,
+  activations,
+}: {
+  relics: Relic[];
+  activations: RelicActivation[];
+}) {
+  if (activations.length === 0) return null;
+  const byId = new Map(relics.map((r) => [r.id, r]));
+  const active = activations.filter((a) => a.active);
+  const inactive = activations.filter((a) => !a.active);
+  return (
+    <div className="rc-panel mb-3 p-3">
+      <div className="rc-eyebrow mb-1.5" style={{ fontSize: "0.6rem" }}>
+        Activos en esta mano
+      </div>
+      <div className="flex flex-col gap-1">
+        {active.map((a) => {
+          const r = byId.get(a.id);
+          if (!r) return null;
+          return (
+            <div
+              key={a.id}
+              className="flex items-center gap-2 text-xs text-emerald-300"
+            >
+              <span aria-hidden="true">✓</span>
+              <span className="font-semibold">{r.name}</span>
+              {a.contribution && (
+                <span className="ml-auto whitespace-nowrap font-mono text-[11px] text-emerald-200">
+                  {a.contribution}
+                </span>
+              )}
+            </div>
+          );
+        })}
+        {inactive.map((a) => {
+          const r = byId.get(a.id);
+          if (!r) return null;
+          return (
+            <div
+              key={a.id}
+              className="flex items-center gap-2 text-xs text-slate-600"
+            >
+              <span aria-hidden="true">✗</span>
+              <span>{r.name}</span>
+              <span className="ml-auto truncate text-[10px] text-slate-600">
+                {a.reason}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Desglose de puntuación legible (Iteración 2G, sección 5) ----------------
+   Base/Modificadores/Cartas vienen de breakdown.linesDetailed (categorizado
+   dentro de scorePlay). Boss se aísla comparando breakdown.lines contra la
+   longitud de linesDetailed: el boss solo AÑADE líneas al final (ver
+   scoreWithBoss/bosses.ts), nunca reordena ni toca las que ya había — así
+   que todo lo que sobra a partir de ese índice es, por construcción, la
+   línea que metió el boss. Ningún cálculo nuevo, solo lectura. */
+function ScoreBreakdownDetails({
+  breakdown,
+  defaultExpanded = false,
+}: {
+  breakdown: ScoreBreakdown;
+  defaultExpanded?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const baseLine = breakdown.linesDetailed.find((l) => l.category === "base");
+  const relicLines = breakdown.linesDetailed.filter((l) => l.category === "relic");
+  const cardLines = breakdown.linesDetailed.filter((l) => l.category === "card");
+  const bossLines = breakdown.lines.slice(breakdown.linesDetailed.length);
+  const hasDetail = relicLines.length > 0 || cardLines.length > 0 || bossLines.length > 0;
+
+  if (!hasDetail) return null;
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="mt-1 text-left text-[11px] text-slate-500 underline decoration-dotted underline-offset-2 hover:text-slate-300"
+      >
+        Ver desglose ({relicLines.length + cardLines.length + bossLines.length})
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-2 max-w-md rounded-lg border border-white/10 bg-slate-950/60 p-3 text-[11px]">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="rc-eyebrow" style={{ fontSize: "0.58rem" }}>
+          Desglose
+        </span>
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="text-slate-500 hover:text-slate-300"
+        >
+          Ocultar
+        </button>
+      </div>
+      {baseLine && (
+        <div className="mb-2 text-slate-300">{baseLine.text}</div>
+      )}
+      {relicLines.length > 0 && (
+        <div className="mb-2">
+          <div className="mb-0.5 text-slate-500">Modificadores</div>
+          {relicLines.map((l, i) => (
+            <div key={i} className="text-slate-300">
+              {l.text}
+            </div>
+          ))}
+        </div>
+      )}
+      {cardLines.length > 0 && (
+        <div className="mb-2">
+          <div className="mb-0.5 text-slate-500">Cartas</div>
+          {cardLines.map((l, i) => (
+            <div key={i} className="text-slate-300">
+              {l.text}
+            </div>
+          ))}
+        </div>
+      )}
+      {bossLines.length > 0 && (
+        <div className="mb-2">
+          <div className="mb-0.5 text-rose-400">Boss</div>
+          {bossLines.map((text, i) => (
+            <div key={i} className="text-rose-200">
+              {text}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center justify-between border-t border-white/10 pt-1.5 font-bold text-amber-300">
+        <span className="text-slate-400">Total estimado</span>
+        <span className="rc-num">{breakdown.total.toLocaleString()}</span>
+      </div>
     </div>
   );
 }
@@ -1615,18 +1765,7 @@ function PlayScreen({
                   {preview.breakdown.total.toLocaleString()}
                 </span>
               </div>
-              {preview.breakdown.lines.length > 1 && (
-                <div className="mt-1 flex max-w-md flex-wrap gap-1">
-                  {preview.breakdown.lines.slice(1).map((l, i) => (
-                    <span
-                      key={i}
-                      className="rounded bg-slate-800/70 px-1.5 py-0.5 text-[10px] text-slate-300"
-                    >
-                      {l}
-                    </span>
-                  ))}
-                </div>
-              )}
+              <ScoreBreakdownDetails breakdown={preview.breakdown} />
               {preview.glass.count > 0 && (
                 <div className="mt-1 text-[10px] text-cyan-300">
                   {preview.glass.immune
@@ -1674,16 +1813,18 @@ function PlayScreen({
         )}
       </div>
 
-      {lastScore && lastScore.lines.length > 1 && (
-        <div className="mb-3 flex flex-wrap gap-1.5 text-[11px]">
-          {lastScore.lines.map((l, i) => (
-            <span
-              key={i}
-              className="rounded-md border border-slate-700 bg-slate-900/60 px-2 py-0.5 text-slate-300"
-            >
-              {l}
-            </span>
-          ))}
+      {lastScore && (
+        <div className="mb-3">
+          <ScoreBreakdownDetails breakdown={lastScore} />
+        </div>
+      )}
+
+      {preview && (
+        <div className="mb-3">
+          <ActiveModifiersBlock
+            relics={gs.relics}
+            activations={preview.breakdown.activations}
+          />
         </div>
       )}
 
