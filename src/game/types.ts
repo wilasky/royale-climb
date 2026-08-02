@@ -101,10 +101,39 @@ export interface GameState {
   oathId: string | null;
 }
 
+/** Categoría de una línea de desglose — Iteración 2G, para agrupar el breakdown legible sin parsear texto. */
+export type ScoreLineCategory = "base" | "relic" | "card";
+
+export interface ScoreLine {
+  text: string;
+  category: ScoreLineCategory;
+}
+
+/**
+ * Estado de un modificador poseído respecto a UNA jugada concreta —
+ * Iteración 2G (docs/GAME_FEEL_2G.md). Se computa dentro de `scorePlay`,
+ * la misma función que ya usan preview y ejecución real, así que nunca
+ * hay una segunda fuente de verdad sobre si un modificador activa.
+ */
+export interface RelicActivation {
+  /** id del Relic en RELIC_POOL. */
+  id: string;
+  /** Si contribuyó a esta jugada concreta. */
+  active: boolean;
+  /** Explicación breve: por qué activó, o por qué no. */
+  reason: string;
+  /** Texto corto de la contribución cuando `active` (p.ej. "+3 Mult"), null si no aplica. */
+  contribution: string | null;
+}
+
 export interface ScoreBreakdown {
   handName: string;
   chips: number;
   mult: number;
   total: number;
   lines: string[];
+  /** Igual contenido que `lines` (sin las líneas de boss, añadidas después por `scoreWithBoss`) pero categorizado. */
+  linesDetailed: ScoreLine[];
+  /** Un elemento por cada modificador que el jugador posee (`gs.relics`), en su mismo orden. */
+  activations: RelicActivation[];
 }

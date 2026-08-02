@@ -7,6 +7,7 @@ import {
   scoreWithBoss,
   advanceBossState,
   describeBossState,
+  bossHandWarning,
 } from "./bosses";
 import { scorePlay } from "./scoring";
 import type { Card, GameState } from "./types";
@@ -444,5 +445,56 @@ describe("preview y ejecución real usan la misma función (paridad P0-3, extend
 describe("describeBossState sin boss activo", () => {
   it("devuelve null cuando activeBossId es null", () => {
     expect(describeBossState(baseGs({ activeBossId: null }))).toBeNull();
+  });
+});
+
+describe("bossHandWarning (Iteración 2G, docs/GAME_FEEL_2G.md sección 9)", () => {
+  it("devuelve null sin boss activo", () => {
+    const played = [card({ rank: 5 })];
+    expect(bossHandWarning(baseGs({ activeBossId: null }), played, [], true, false)).toBeNull();
+  });
+
+  it("devuelve null sin cartas seleccionadas", () => {
+    const gs = baseGs({ activeBossId: "the_accountant", bossState: { previousTotal: 500 } });
+    expect(bossHandWarning(gs, [], [], false, false)).toBeNull();
+  });
+
+  it("devuelve null si el boss no penaliza esta jugada concreta", () => {
+    const played = [card({ rank: 10 })];
+    const gs = baseGs({ activeBossId: "the_accountant", bossState: { previousTotal: null } });
+    // Primera mano de la ronda: El Contable nunca penaliza sin listón previo.
+    expect(bossHandWarning(gs, played, [], true, false)).toBeNull();
+  });
+
+  it("advierte cuando El Contable Implacable va a reducir las fichas a la mitad", () => {
+    const played = [card({ rank: 3 })]; // Carta alta, total bajo
+    const gs = baseGs({ activeBossId: "the_accountant", bossState: { previousTotal: 999 } });
+    const warning = bossHandWarning(gs, played, [], false, false);
+    expect(warning).not.toBeNull();
+    expect(warning).toMatch(/Contable Implacable/);
+  });
+
+  it("advierte cuando El Espejo Inestable repite el tipo de mano y penaliza el Mult", () => {
+    const played = [card({ rank: 6 }), card({ rank: 6 })]; // Pareja, igual que la última
+    const gs = baseGs({ activeBossId: "unstable_mirror", bossState: { lastHandName: "Pareja" } });
+    const warning = bossHandWarning(gs, played, [], false, false);
+    expect(warning).not.toBeNull();
+    expect(warning).toMatch(/Espejo Inestable/);
+  });
+
+  it("El Eco del Trono en manos posteriores a la primera SUMA Mult: nunca es una advertencia", () => {
+    const played = [card({ rank: 8 })];
+    const gs = baseGs({ activeBossId: "thrones_echo", bossState: { echoBonus: 2 } });
+    expect(bossHandWarning(gs, played, [], false, false)).toBeNull();
+  });
+
+  it("el texto de advertencia coincide con la línea añadida por el propio boss (misma fuente de verdad)", () => {
+    const played = [card({ rank: 2 })];
+    const gs = baseGs({ activeBossId: "the_accountant", bossState: { previousTotal: 999 } });
+    const pre = scorePlay(played, [], gs, false, false);
+    const post = scoreWithBoss(played, [], gs, false, false);
+    const expectedLine = post.lines[post.lines.length - 1];
+    expect(pre.lines.includes(expectedLine)).toBe(false);
+    expect(bossHandWarning(gs, played, [], false, false)).toBe(expectedLine);
   });
 });

@@ -267,3 +267,119 @@ describe("evaluateHand - sigue disponible como utilidad de tipo de mano", () => 
     expect(evaluateHand(cards).name).toBe("Pareja");
   });
 });
+
+describe("scorePlay - activations (Iteración 2G, docs/GAME_FEEL_2G.md)", () => {
+  it("un modificador activo aparece en activations con active:true y contribution", () => {
+    const played = [card({ rank: 7, suit: "hearts" }), card({ rank: 7, suit: "hearts" })];
+    const gs = baseGs({ relics: [relic("hearts_mult")] });
+    const result = scorePlay(played, [], gs, false, false);
+    const act = result.activations.find((a) => a.id === "hearts_mult");
+    expect(act).toBeDefined();
+    expect(act?.active).toBe(true);
+    expect(act?.contribution).toBe("+2 Mult");
+    expect(act?.reason.length).toBeGreaterThan(0);
+  });
+
+  it("un modificador inactivo aparece con active:false, reason explicativo y contribution null", () => {
+    const played = [card({ rank: 7 }), card({ rank: 3 })];
+    const gs = baseGs({ relics: [relic("pair_mult")] });
+    const result = scorePlay(played, [], gs, false, false);
+    const act = result.activations.find((a) => a.id === "pair_mult");
+    expect(act).toEqual({
+      id: "pair_mult",
+      active: false,
+      reason: "No has jugado una Pareja",
+      contribution: null,
+    });
+  });
+
+  it("final_hand inactivo cuando no es la última mano, activo cuando sí lo es", () => {
+    const played = [card({ rank: 10 })];
+    const gs = baseGs({ relics: [relic("final_hand", "legendary")] });
+    const notLast = scorePlay(played, [], gs, false, false).activations[0];
+    const last = scorePlay(played, [], gs, false, true).activations[0];
+    expect(notLast).toEqual({
+      id: "final_hand",
+      active: false,
+      reason: "No es la última mano de la ronda",
+      contribution: null,
+    });
+    expect(last.active).toBe(true);
+    expect(last.contribution).toBe("×4 Mult");
+  });
+
+  it("varios modificadores en la misma jugada aparecen todos, en el orden de gs.relics", () => {
+    const played = [card({ rank: 10, suit: "spades" }), card({ rank: 10, suit: "spades" })];
+    const gs = baseGs({
+      relics: [relic("pair_mult"), relic("spades_chip"), relic("straight_mult")],
+    });
+    const result = scorePlay(played, [], gs, false, false);
+    expect(result.activations.map((a) => a.id)).toEqual([
+      "pair_mult",
+      "spades_chip",
+      "straight_mult",
+    ]);
+    expect(result.activations[0].active).toBe(true); // Pareja
+    expect(result.activations[1].active).toBe(true); // ♠ jugadas
+    expect(result.activations[2].active).toBe(false); // no es Escalera
+  });
+
+  it("efectos de carta (acero/cristal) no generan entradas de activations (no son modificadores)", () => {
+    const played = [card({ rank: 10, glass: true })];
+    const held = [card({ rank: 3, steel: true })];
+    const result = scorePlay(played, held, baseGs(), false, false);
+    expect(result.activations).toEqual([]);
+    expect(result.linesDetailed.some((l) => l.category === "card" && l.text.includes("Cristal"))).toBe(true);
+    expect(result.linesDetailed.some((l) => l.category === "card" && l.text.includes("Acero"))).toBe(true);
+  });
+
+  it("boss no genera entradas de activations (se trata aparte, ver bosses.ts)", () => {
+    const played = [card({ rank: 10 })];
+    const gs = baseGs({ relics: [relic("hearts_mult")], activeBossId: "unstable_mirror" });
+    const result = scorePlay(played, [], gs, false, false);
+    expect(result.activations.every((a) => a.id !== "unstable_mirror")).toBe(true);
+  });
+
+  it("modificadores de fin de ronda (interest/discard_refund/overflow) aparecen siempre inactivos durante la jugada, con motivo", () => {
+    const played = [card({ rank: 10 })];
+    const gs = baseGs({ relics: [relic("interest", "epic"), relic("discard_refund", "rare")] });
+    const result = scorePlay(played, [], gs, false, false);
+    expect(result.activations).toEqual([
+      { id: "interest", active: false, reason: "Se aplica al terminar la ronda (interés sobre tu dinero)", contribution: null },
+      { id: "discard_refund", active: false, reason: "Se aplica al terminar la ronda (descartes sin usar)", contribution: null },
+    ]);
+  });
+
+  it("the_collector y blood_pact están siempre activos mientras se posean", () => {
+    const played = [card({ rank: 10 })];
+    const gs = baseGs({ relics: [relic("the_collector", "legendary"), relic("blood_pact", "legendary")] });
+    const result = scorePlay(played, [], gs, false, false);
+    expect(result.activations.every((a) => a.active)).toBe(true);
+  });
+});
+
+describe("scorePlay - linesDetailed (Iteración 2G)", () => {
+  it("la primera línea siempre es la línea base de la mano", () => {
+    const played = [card({ rank: 7 }), card({ rank: 7 })];
+    const result = scorePlay(played, [], baseGs(), false, false);
+    expect(result.linesDetailed[0]).toEqual({
+      text: result.lines[0],
+      category: "base",
+    });
+  });
+
+  it("linesDetailed y lines contienen exactamente el mismo texto en el mismo orden", () => {
+    const played = [card({ rank: 10, suit: "spades" }), card({ rank: 10, suit: "spades" })];
+    const gs = baseGs({ relics: [relic("spades_chip"), relic("pair_mult")] });
+    const result = scorePlay(played, [], gs, false, false);
+    expect(result.linesDetailed.map((l) => l.text)).toEqual(result.lines);
+  });
+
+  it("una línea de modificador se categoriza como relic", () => {
+    const played = [card({ rank: 7 }), card({ rank: 7 })];
+    const gs = baseGs({ relics: [relic("pair_mult")] });
+    const result = scorePlay(played, [], gs, false, false);
+    const line = result.linesDetailed.find((l) => l.text.includes("Eco Gemelo"));
+    expect(line?.category).toBe("relic");
+  });
+});

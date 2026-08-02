@@ -426,3 +426,31 @@ export function describeBossState(gs: GameState): string | null {
   if (!boss?.describeState) return null;
   return boss.describeState(gs.bossState, gs);
 }
+
+/**
+ * Advertencia de penalización de boss para la jugada seleccionada —
+ * Iteración 2G (docs/GAME_FEEL_2G.md, sección 9). Reutiliza
+ * `scorePlay`/`scoreWithBoss` (las mismas funciones que la preview y la
+ * ejecución real) para comparar el resultado antes y después del boss:
+ * ninguna lógica nueva decide si el boss penaliza, solo se observa si
+ * el total bajó. Devuelve `null` si no hay boss activo, no hay cartas
+ * seleccionadas, o esta jugada concreta no resulta penalizada (p.ej.
+ * El Eco del Trono en manos posteriores a la primera, que SUMA Mult en
+ * vez de restar, no cuenta como penalización).
+ */
+export function bossHandWarning(
+  gs: GameState,
+  played: Card[],
+  heldInHand: Card[],
+  isFirstHand: boolean,
+  isLastHand: boolean
+): string | null {
+  if (!gs.activeBossId || played.length === 0) return null;
+  const boss = getBossById(gs.activeBossId);
+  if (!boss?.modifyScore) return null;
+  const pre = scorePlay(played, heldInHand, gs, isFirstHand, isLastHand);
+  const post = scoreWithBoss(played, heldInHand, gs, isFirstHand, isLastHand);
+  if (post.total >= pre.total) return null;
+  const newLines = post.lines.filter((l) => !pre.lines.includes(l));
+  return newLines[newLines.length - 1] ?? `${boss.name} reduce el resultado de esta jugada.`;
+}
