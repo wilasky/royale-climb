@@ -21,6 +21,9 @@ function memoryStorage(initial: Record<string, string> = {}): ProfileStorage {
     setItem: (key, value) => {
       store[key] = value;
     },
+    removeItem: (key) => {
+      delete store[key];
+    },
   };
 }
 

@@ -67,6 +67,8 @@ export function defaultProfile(): PlayerProfile {
 export interface ProfileStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+  /** Usado por `runSave.ts::deleteRunSave` para borrar la run activa. */
+  removeItem(key: string): void;
 }
 
 function realLocalStorage(): ProfileStorage | null {
