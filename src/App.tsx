@@ -782,6 +782,19 @@ function ActiveModifiersBlock({
   relics: Relic[];
   activations: RelicActivation[];
 }) {
+  // Pulso breve al pasar de inactivo a activo (Iteración 2G, sección 6):
+  // compara contra el conjunto de ids activos en el render anterior, así
+  // que solo "anuncia" transiciones reales, no cada re-render.
+  const prevActiveRef = useRef<Set<string>>(new Set());
+  const activeIds = new Set(activations.filter((a) => a.active).map((a) => a.id));
+  const justActivated = new Set(
+    [...activeIds].filter((id) => !prevActiveRef.current.has(id))
+  );
+  useEffect(() => {
+    prevActiveRef.current = activeIds;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+
   if (activations.length === 0) return null;
   const byId = new Map(relics.map((r) => [r.id, r]));
   const active = activations.filter((a) => a.active);
@@ -798,7 +811,9 @@ function ActiveModifiersBlock({
           return (
             <div
               key={a.id}
-              className="flex items-center gap-2 text-xs text-emerald-300"
+              className={`flex items-center gap-2 rounded text-xs text-emerald-300 ${
+                justActivated.has(a.id) ? "animate-[rcpulse_0.4s_ease-out]" : ""
+              }`}
             >
               <span aria-hidden="true">✓</span>
               <span className="font-semibold">{r.name}</span>
@@ -1409,6 +1424,10 @@ function PlayScreen({
   const [bigScore, setBigScore] = useState<number | null>(null);
   const [shake, setShake] = useState<"" | "small" | "big">("");
   const [scoringIds, setScoringIds] = useState<string[]>([]);
+  // Historial de jugadas colapsado por defecto (Iteración 2G, sección
+  // 11): es información secundaria, no debe competir por espacio con
+  // lo que hace falta para decidir la mano actual.
+  const [historyOpen, setHistoryOpen] = useState(false);
   const handRef = useRef<HTMLDivElement>(null);
   const rng = useRef(makeRng(gs.seed + gs.round * 7919));
 
@@ -1600,6 +1619,7 @@ function PlayScreen({
   };
 
   const progress = Math.min(100, (gs.scoreThisRound / gs.target) * 100);
+  const objectiveCleared = gs.scoreThisRound >= gs.target;
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 px-3 pb-6 lg:flex-row lg:items-start">
@@ -1712,19 +1732,23 @@ function PlayScreen({
           })()
         ))}
 
-      <div className="rc-panel mb-3 p-3">
+      <div
+        className={`rc-panel mb-3 p-3 ${
+          objectiveCleared ? "border-emerald-400/60" : ""
+        }`}
+      >
         <div className="mb-1.5 flex items-baseline justify-between">
           <span className="rc-eyebrow" style={{ fontSize: "0.62rem" }}>
-            Objetivo de ronda
+            {objectiveCleared ? (
+              <span className="animate-[rcpulse_0.9s_ease-in-out_2] text-emerald-300">
+                ✓ Objetivo superado
+              </span>
+            ) : (
+              "Objetivo de ronda"
+            )}
           </span>
           <span className="rc-num text-xs">
-            <span
-              className={
-                gs.scoreThisRound >= gs.target
-                  ? "text-emerald-300"
-                  : "text-amber-300"
-              }
-            >
+            <span className={objectiveCleared ? "text-emerald-300" : "text-amber-300"}>
               {gs.scoreThisRound.toLocaleString()}
             </span>
             <span className="text-slate-500">
@@ -1734,8 +1758,16 @@ function PlayScreen({
           </span>
         </div>
         <div className="rc-bar">
-          <div className="rc-bar__fill" style={{ width: `${progress}%` }} />
+          <div
+            className={`rc-bar__fill ${objectiveCleared ? "rc-bar__fill--clear" : ""}`}
+            style={{ width: `${progress}%` }}
+          />
         </div>
+        {!objectiveCleared && (
+          <div className="mt-1 text-right text-[10px] text-slate-500">
+            Faltan {(gs.target - gs.scoreThisRound).toLocaleString()}
+          </div>
+        )}
       </div>
 
       <div
@@ -1946,23 +1978,37 @@ function PlayScreen({
       </div>
 
       {gs.history.length > 0 && (
-        <div className="rc-panel mt-4 p-3">
-          <div className="rc-eyebrow mb-1.5" style={{ fontSize: "0.6rem" }}>
-            Historial de jugadas
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {gs.history.slice(0, 12).map((h, i) => (
-              <span
-                key={i}
-                className="rounded-md border border-white/5 bg-white/[0.03] px-2 py-0.5 text-[11px] text-slate-300"
-              >
-                R{h.round} · {h.hand}{" "}
-                <span className="font-mono text-amber-300">
-                  +{h.score.toLocaleString()}
-                </span>
-              </span>
-            ))}
-          </div>
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((v) => !v)}
+            className="flex w-full items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] px-3 py-1.5 text-left"
+            aria-expanded={historyOpen}
+          >
+            <span className="rc-eyebrow" style={{ fontSize: "0.58rem" }}>
+              Historial de jugadas ({gs.history.length})
+            </span>
+            <span className="text-[11px] text-slate-500">
+              {historyOpen ? "Ocultar ▲" : "Mostrar ▼"}
+            </span>
+          </button>
+          {historyOpen && (
+            <div className="rc-panel mt-1.5 p-3">
+              <div className="flex flex-wrap gap-1.5">
+                {gs.history.slice(0, 12).map((h, i) => (
+                  <span
+                    key={i}
+                    className="rounded-md border border-white/5 bg-white/[0.03] px-2 py-0.5 text-[11px] text-slate-300"
+                  >
+                    R{h.round} · {h.hand}{" "}
+                    <span className="font-mono text-amber-300">
+                      +{h.score.toLocaleString()}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
       </div>

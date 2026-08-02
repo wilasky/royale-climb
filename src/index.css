@@ -260,7 +260,12 @@ body {
   border-radius: 999px;
   background: linear-gradient(90deg, var(--rc-cyan), var(--rc-magenta));
   box-shadow: 0 0 12px rgba(0, 229, 255, 0.6);
-  transition: width 0.5s ease;
+  transition: width 0.5s ease, background 0.3s ease, box-shadow 0.3s ease;
+}
+/* Objetivo de ronda superado — Iteración 2G, sección 8. */
+.rc-bar__fill--clear {
+  background: linear-gradient(90deg, #34d399, #ffe94d);
+  box-shadow: 0 0 14px rgba(52, 211, 153, 0.7);
 }
 
 /* ---------- carta "Chrome Holo" (marco real, no mockup) ---------- */
@@ -336,4 +341,19 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .rc-arena__floor { display: none; }
+}
+
+/* Iteración 2G, sección 13: apaga toda microanimación no esencial
+   (incluidas las keyframes rcshake/rcfloat/rcbigscore/... registradas
+   inline en App.tsx, y la animación de partículas aplicada vía style
+   inline) sin tener que enumerar cada clase de Tailwind una a una —
+   todas comparten el prefijo "animate-" en el nombre de clase generado,
+   y el `!important` de una regla de hoja de estilos gana a un `animation`
+   inline sin `!important`. */
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-"],
+  [style*="animation"] {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
 }
