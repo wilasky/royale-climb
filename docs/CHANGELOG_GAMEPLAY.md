@@ -344,3 +344,95 @@ Ver `docs/BALANCE_ITERATION_2B.md` sección 12 — la curva de objetivo y el
 dinero esperado por fase son estimaciones razonadas, no el resultado de una
 simulación exhaustiva; quedan como hipótesis a validar en el próximo
 playtest real.
+
+# Changelog de gameplay — Iteración 2C
+
+Referencia: `docs/BUILD_AGENCY_ITERATION_2C.md` (plan y detalle completos).
+Esta iteración da al jugador herramientas para perseguir una identidad de
+build sin volver a tocar el balance base de la 2B (curva de dificultad,
+objetivos de ronda, precios, recompensas económicas, límite de 6
+modificadores y valores numéricos de modificadores quedan exactamente
+igual, salvo el caso de bug demostrado — no hubo ninguno).
+
+## 1. Arquetipos de build
+
+Nuevo `src/game/archetypes.ts`: clasifica los 24 modificadores existentes
+en 12 arquetipos (`PAIR`, `STRAIGHT`, `FLUSH`, `LOW_CARDS`, `HIGH_CARDS`,
+`SMALL_HAND`, `FIRST_HAND`, `LAST_HAND`, `NO_DISCARD`, `ECONOMY`,
+`CARD_ENHANCEMENT`, `GENERAL`) con rol funcional
+(starter/enabler/payoff/utility/generalist). Puramente declarativo, sin
+cambios de comportamiento. Nuevo `src/game/buildIdentity.ts`:
+`computeBuildIdentity(relics)` calcula afinidad por arquetipo (número de
+piezas + intensidad none/weak/moderate/strong) y el arquetipo dominante,
+excluyendo GENERAL explícitamente de poder dominar una build.
+
+## 2. Reroll de recompensa y de tienda
+
+`RewardScreen` ("Volver a tirar", 3$/5$/7$, máximo 3 por recompensa) y
+`ShopScreen` ("Volver a tirar tienda", 3$/5$/7$/7$, máximo 4 por tienda),
+costes centralizados en `config.ts`
+(`REWARD_REROLL_COSTS`/`MAX`, `SHOP_REROLL_COSTS`/`MAX`) y funciones puras
+compartidas en `src/game/rerolls.ts`. El coste se paga al confirmar, nunca
+antes; la oferta solo se recalcula (y por tanto solo consume RNG) dentro
+del propio clic. `pickRelicsAvoidingRepeat` evita repetir exactamente la
+oferta anterior en un reroll de recompensa cuando el pool tiene margen
+para una alternativa real. El reroll de tienda regenera solo lo que sigue
+disponible para comprar — los modificadores comprados y las mejoras de
+carta ya aplicadas (ahora identificadas por `kind` estable, no por índice
+de array) no reaparecen. Ninguna opción existente se eliminó: elegir,
+saltar (+3$), reemplazar con 6/6, comprar, vender cartas.
+
+## 3. Sesgo de sinergia (synergy bias)
+
+Nuevo `src/game/offers.ts::pickRelicOffer`, que sustituye a las llamadas
+directas a `pickRelics` en ambas pantallas. Si el jugador ya tiene 2+
+piezas del mismo arquetipo (`SYNERGY_MIN_AFFINITY`), los candidatos
+relacionados reciben un +30% de peso (`SYNERGY_BONUS`) sobre su peso de
+rareza existente — nunca lo sustituyen, así un legendario en fase 1 (peso
+0) sigue excluido pase lo que pase. `pickRelics` ganó un
+`weightMultiplier` opcional, retrocompatible. Tras el sorteo, un
+corrector de mejor esfuerzo (no garantía) intenta que la oferta contenga
+al menos un candidato relacionado con la build y al menos una opción para
+pivotar, solo si el pool restante lo permite.
+
+## 4. Destierro limitado (banish)
+
+Botón "Desterrar" en cada modificador ofrecido (no en los ya poseídos).
+Primer destierro gratis, segundo 5$ (`BANISH_MAX=2`, `BANISH_COSTS`,
+`src/game/banish.ts`, puro). Nuevo campo `GameState.banishedRelicIds`,
+inicializado vacío en cada partida nueva y persistido tal cual entre
+rondas/tiendas/Endless de la misma run (es parte del propio estado, sin
+lógica adicional). Un modificador desterrado se excluye de inmediato de
+la oferta visible y de toda generación futura de esa run.
+
+## 5. Información de build en el HUD y debug local
+
+Línea discreta en `PlayScreen` ("Build: Escaleras" o "Afinidad: Escaleras
+· Economía", máximo 2 etiquetas), visible solo con afinidad suficiente,
+nunca para GENERAL, sin números ni pesos internos. Nuevo
+`src/game/debug.ts::logRelicOfferDebug`, gateado por
+`import.meta.env.DEV` (nunca en producción): vuelca a consola afinidades,
+dominante, desterrados, rerolls usados y seed en cada generación de
+oferta.
+
+## 6. Pruebas añadidas
+
+108 tests en 10 archivos (antes 63 en 5): nuevos `archetypes.test.ts`,
+`buildIdentity.test.ts`, `rerolls.test.ts`, `offers.test.ts` y
+`banish.test.ts`. Cubren clasificación de los 24 modificadores,
+multi-arquetipo, exclusión de GENERAL como dominante, costes de reroll
+3/5/7 (y 7 repetido en tienda a partir del tercero), límites de intentos,
+bloqueo sin dinero suficiente, sesgo de sinergia medido estadísticamente
+con tolerancias amplias (sin muestras minúsculas), restricción de fase
+mantenida bajo sesgo, determinismo de `pickRelicOffer`, y las reglas de
+banish (máximo 2, primero gratis, sin mutar arrays, exclusión futura). Los
+63 tests de las iteraciones 2A/2B siguen pasando sin cambios de
+comportamiento (solo se amplió el fixture `baseGs` de `scoring.test.ts`
+con el nuevo campo `banishedRelicIds`).
+
+## 7. Riesgos pendientes
+
+Ver `docs/BUILD_AGENCY_ITERATION_2C.md` secciones 12-13 — el sesgo de
+sinergia y los costes de reroll/banish no se han validado contra una run
+completa jugada de principio a fin ni contra un playtest humano; quedan
+como hipótesis documentadas para el próximo playtest.
