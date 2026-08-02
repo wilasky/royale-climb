@@ -27,6 +27,8 @@ import {
   initBossState,
   scoreWithBoss,
   advanceBossState,
+  getBossById,
+  describeBossState,
 } from "./game/bosses";
 import { phaseForRound } from "./game/progression";
 import { REWARD_WEIGHTS, SHOP_WEIGHTS, STARTING_MONEY, HANDS_PER_ROUND, DISCARDS_PER_ROUND, HAND_SIZE, REWARD_OFFER_COUNT, SHOP_RELIC_COUNT, SHOP_SPECIAL_COUNT, MAX_ACTIVE_RELICS, DECLINE_RELIC_COMPENSATION, REWARD_REROLL_COSTS, REWARD_REROLL_MAX, SHOP_REROLL_COSTS, SHOP_REROLL_MAX, BANISH_MAX, BANISH_COSTS, SYNERGY_MIN_AFFINITY } from "./game/config";
@@ -1074,6 +1076,59 @@ function PlayScreen({
         <p className="mb-3 text-xs text-slate-500">{buildLabel}</p>
       )}
 
+      {/* Panel de boss activo / telegraph del próximo boss del ante —
+          Iteración 2D, sección 7-8. Sin bosses en Endless. */}
+      {!gs.endless &&
+        (gs.activeBossId ? (
+          (() => {
+            const boss = getBossById(gs.activeBossId!);
+            if (!boss) return null;
+            const stateDesc = describeBossState(gs);
+            return (
+              <div className="rc-panel rc-panel__corners mb-3 border border-rose-500/40 p-3">
+                <div className="mb-1 flex items-center gap-2">
+                  <span
+                    className="rc-eyebrow text-rose-300"
+                    style={{ fontSize: "0.62rem" }}
+                  >
+                    BOSS
+                  </span>
+                  <span className="text-sm font-semibold text-rose-200">
+                    {boss.name}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">{boss.description}</p>
+                {stateDesc && (
+                  <p className="mt-1 text-xs text-rose-300/80">{stateDesc}</p>
+                )}
+              </div>
+            );
+          })()
+        ) : (
+          (() => {
+            const upcoming = selectBossForAnte(gs.seed, gs.ante as 1 | 2 | 3);
+            if (!upcoming) return null;
+            return (
+              <div className="rc-panel mb-3 p-3 opacity-80">
+                <div className="mb-1 flex items-center gap-2">
+                  <span
+                    className="rc-eyebrow text-slate-400"
+                    style={{ fontSize: "0.62rem" }}
+                  >
+                    Próximo boss del ante
+                  </span>
+                  <span className="text-sm font-semibold text-slate-200">
+                    {upcoming.name}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500">
+                  {upcoming.shortDescription}
+                </p>
+              </div>
+            );
+          })()
+        ))}
+
       <div className="rc-panel mb-3 p-3">
         <div className="mb-1.5 flex items-baseline justify-between">
           <span className="rc-eyebrow" style={{ fontSize: "0.62rem" }}>
@@ -2015,6 +2070,11 @@ function WinScreen({
         <path d="M9.5 17h5l1 3h-7Z" />
       </svg>
       <h2 className="rc-title text-4xl">¡PARTIDA COMPLETADA!</h2>
+      {gs.activeBossId && getBossById(gs.activeBossId) && (
+        <p className="text-sm font-semibold text-rose-300">
+          Boss final derrotado: {getBossById(gs.activeBossId)!.name}
+        </p>
+      )}
       <p className="text-slate-400">
         Has superado las {gs.round} rondas de esta run. Puedes parar aquí, o
         seguir escalando en Modo Endless desde la ronda {gs.round + 1}.
